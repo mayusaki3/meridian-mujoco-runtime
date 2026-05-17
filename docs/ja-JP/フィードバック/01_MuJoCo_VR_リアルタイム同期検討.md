@@ -19,7 +19,229 @@ MuJoCo を authoritative physics とし、VR 側は visualization / interaction 
 
 ---
 
+## PlatformIO と MuJoCo の連携
+
+PlatformIO と MuJoCo を連携し、以下を実現する。
+
+- 実機制御
+- シミュレーション
+- HIL
+- SIL
+- sysid
+- PID tuning
+- VR 可視化
+
+---
+
 ## 基本構成
+
+```text
+MuJoCo
+  ↑↓
+通信層(TCP/UDP/Serial/Ethernet)
+  ↑↓
+PlatformIO firmware
+  ↑↓
+ESP32 / STM32 / サーボ
+```
+
+---
+
+## 推奨最小構成
+
+```text
+PC
+ ├─ MuJoCo
+ ├─ Python bridge
+ └─ UDP socket
+        ↕
+ESP32 / STM32
+ └─ PlatformIO firmware
+```
+
+---
+
+## 制御ロジック分離
+
+制御ロジックとハードウェア依存部分を分離する。
+
+推奨構成：
+
+```text
+lib/
+  control/
+  communication/
+  hardware/
+  simulator/
+```
+
+---
+
+## Hardware Abstraction Layer
+
+例：
+
+```cpp
+class IJoint {
+public:
+    virtual float getAngle() = 0;
+    virtual void setTorque(float t) = 0;
+};
+```
+
+実機：
+
+```cpp
+class RealJoint : public IJoint
+```
+
+MuJoCo：
+
+```cpp
+class SimJoint : public IJoint
+```
+
+これにより同じ制御コードを実機とシミュレータで共通利用可能。
+
+---
+
+## 通信方式
+
+推奨順位：
+
+| 通信 | 推奨 |
+|---|---|
+| UDP | ◎ |
+| Ethernet | ◎ |
+| TCP | ○ |
+| USB Serial | ○ |
+| CAN | ○ |
+
+---
+
+## UDP 推奨理由
+
+- 実装容易
+- Python と相性が良い
+- ESP32 実装容易
+- デバッグ容易
+
+---
+
+## sysid
+
+以下の流れを実現する。
+
+```text
+実機ログ取得
+→ MuJoCo parameter optimization
+→ simulator reproduction
+```
+
+---
+
+## simulation time ベース制御
+
+実時間(real time)ではなく simulation time を基準とする。
+
+例：
+
+```text
+実時間 10ms
+= simulation 0.1ms
+```
+
+でも成立可能。
+
+重要なのは wall clock ではなく simulation clock を基準とすること。
+
+---
+
+## deterministic simulation
+
+simulation step を基準とした同期を行う。
+
+例：
+
+```text
+step 1000
+```
+
+を同期単位として扱う。
+
+これにより以下を実現可能。
+
+- 再現性
+- rollback
+- replay
+- sysid
+- deterministic debug
+
+---
+
+## tick driven architecture
+
+重要なのは timer interrupt ではなく tick 駆動。
+
+例：
+
+```cpp
+controller.tick(dt);
+```
+
+---
+
+## timer interrupt 非依存
+
+割り込み無しでも以下で動作可能。
+
+```cpp
+while (true) {
+    controller.tick(dt);
+}
+```
+
+interrupt 使用時：
+
+```cpp
+ISR(timer) {
+    controller.tick(dt);
+}
+```
+
+---
+
+## PlatformIO 依存除去
+
+制御コアは PlatformIO や timer interrupt に依存しない構成を推奨。
+
+時間供給と制御ロジックを分離する。
+
+---
+
+## 抽象化例
+
+```cpp
+class IClock {
+public:
+    virtual uint64_t now() = 0;
+};
+```
+
+---
+
+## time source
+
+| 環境 | time source |
+|---|---|
+| ESP32 | hardware timer |
+| Linux | std::chrono |
+| MuJoCo | simulation step |
+| unit test | fake clock |
+
+---
+
+## MuJoCo authoritative physics
 
 ```text
 MuJoCo
@@ -76,45 +298,6 @@ root
 ```
 
 joint 構造が一致していることで、角度情報と位置情報の同期のみで VR 側に物理演算結果を反映可能。
-
----
-
-## simulation time ベース制御
-
-実時間(real time)ではなく simulation time を基準とする。
-
-例：
-
-```text
-実時間 10ms
-= simulation 0.1ms
-```
-
-でも成立可能。
-
-重要なのは wall clock ではなく simulation clock を基準とすること。
-
----
-
-## deterministic simulation
-
-simulation step を基準とした同期を行う。
-
-例：
-
-```text
-step 1000
-```
-
-を同期単位として扱う。
-
-これにより以下を実現可能。
-
-- 再現性
-- rollback
-- replay
-- sysid
-- deterministic debug
 
 ---
 
@@ -233,44 +416,6 @@ VR Client
 ```
 
 状態同期を行い、入力同期ではなく state replication を行う。
-
----
-
-## PlatformIO 依存除去
-
-制御コアは PlatformIO や timer interrupt に依存しない構成を推奨。
-
-重要なのは tick driven architecture。
-
-例：
-
-```cpp
-controller.tick(dt);
-```
-
-時間供給と制御ロジックを分離する。
-
----
-
-## 抽象化例
-
-```cpp
-class IClock {
-public:
-    virtual uint64_t now() = 0;
-};
-```
-
----
-
-## time source
-
-| 環境 | time source |
-|---|---|
-| ESP32 | hardware timer |
-| Linux | std::chrono |
-| MuJoCo | simulation step |
-| unit test | fake clock |
 
 ---
 

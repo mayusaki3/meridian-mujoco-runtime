@@ -1,8 +1,8 @@
 <!--
 HLDocS:LLM-MANAGED
-doc_id: doc-20260521-f62ae8
+doc_id: doc-20260521-2ae8
 lang: ja-JP
-document_type: note
+document_type: spec
 canonical_title: MuJoCoデータセットをどう扱うか
 canonical_document: true
 -->

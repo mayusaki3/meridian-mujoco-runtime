@@ -1,8 +1,8 @@
 <!--
 HLDocS:LLM-MANAGED
-doc_id: doc-20260521-c84d91
+doc_id: doc-20260521-4d91
 lang: ja-JP
-document_type: note
+document_type: spec
 canonical_title: システム同定(sysid)をどう扱うか
 canonical_document: true
 -->

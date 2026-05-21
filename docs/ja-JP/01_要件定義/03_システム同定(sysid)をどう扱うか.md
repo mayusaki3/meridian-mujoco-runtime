@@ -2,7 +2,7 @@
 HLDocS:LLM-MANAGED
 doc_id: doc-20260521-c84d91
 lang: ja-JP
-document_type: spec
+document_type: note
 canonical_title: システム同定(sysid)をどう扱うか
 canonical_document: true
 -->

@@ -2,8 +2,8 @@
 HLDocS:LLM-MANAGED
 doc_id: doc-20260521-9ab52e
 lang: ja-JP
-document_type: spec
-canonical_title: ユースケース
+document_type: note
+canonical_title: SILとHILを実現するには
 canonical_document: true
 -->
 

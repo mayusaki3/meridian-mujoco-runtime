@@ -2,7 +2,7 @@
 HLDocS:LLM-MANAGED
 doc_id: doc-20260521-f62ae8
 lang: ja-JP
-document_type: spec
+document_type: note
 canonical_title: MuJoCoデータセットをどう扱うか
 canonical_document: true
 -->

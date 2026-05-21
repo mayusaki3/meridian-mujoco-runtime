@@ -1,6 +1,6 @@
 <!--
 HLDocS:LLM-MANAGED
-doc_id: doc-20260521-2ae8
+doc_id: doc-20260521-000003Z-2AE8
 lang: ja-JP
 document_type: spec
 canonical_title: MuJoCoデータセットをどう扱うか

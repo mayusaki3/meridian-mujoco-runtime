@@ -1,6 +1,6 @@
 <!--
 HLDocS:LLM-MANAGED
-doc_id: doc-20260521-b52e
+doc_id: doc-20260521-000005Z-B52E
 lang: ja-JP
 document_type: spec
 canonical_title: SILとHILを実現するには

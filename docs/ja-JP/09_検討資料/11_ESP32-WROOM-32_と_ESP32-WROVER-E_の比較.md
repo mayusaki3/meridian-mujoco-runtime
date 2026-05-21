@@ -1,5 +1,3 @@
-[目次](../README.md) > docs/ja-JP > フィードバック > ESP32-WROOM-32 と ESP32-WROVER-E の比較
-
 # ESP32-WROOM-32 と ESP32-WROVER-E の比較
 
 ## 概要
@@ -338,7 +336,3 @@ ESP32 Dev Module
 https://documentation.espressif.com/esp32-wroom-32_datasheet_en.html
 https://documentation.espressif.com/esp32-wrover-e_esp32-wrover-ie_datasheet_en.html
 https://documentation.espressif.com/esp32_datasheet_en.html
-
----
-
-[目次](../README.md) > docs/ja-JP > フィードバック > ESP32-WROOM-32 と ESP32-WROVER-E の比較

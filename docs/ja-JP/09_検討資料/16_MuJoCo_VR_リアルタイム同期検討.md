@@ -1,5 +1,3 @@
-[目次](../README.md) > docs/ja-JP > フィードバック > MuJoCo VR リアルタイム同期検討
-
 # MuJoCo VR リアルタイム同期検討
 
 ## 概要
@@ -468,6 +466,3 @@ ESP32
 - PlatformIO 非依存 control core
 
 特に、joint structure が一致していれば、角度情報および位置情報の同期のみで MuJoCo の物理演算結果を VR 側へ反映可能。
-
----
-[目次](../README.md) > docs/ja-JP > フィードバック > MuJoCo VR リアルタイム同期検討

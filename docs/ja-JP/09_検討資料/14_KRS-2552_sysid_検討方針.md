@@ -1,5 +1,3 @@
-[README](../../README.md) > docs/ja-JP > フィードバック > KRS-2552 sysid 検討方針
-
 # KRS-2552 sysid 検討方針
 
 ## 概要
@@ -185,7 +183,3 @@ ESP32 → PC 間は、シリアルまたは Wi‑Fi を使用できる。
 ただし、Wi‑Fi 使用時の遅延ゆらぎは sysid ログへ混ぜない。
 
 sysid で使用する時刻は、ESP32 側 timestamp に統一する。
-
----
-
-[README](../../README.md) > docs/ja-JP > フィードバック > KRS-2552 sysid 検討方針

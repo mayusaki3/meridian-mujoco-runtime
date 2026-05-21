@@ -1,3 +1,12 @@
+<!--
+HLDocS:LLM-MANAGED
+doc_id: doc-20260521-9ab52e
+lang: ja-JP
+document_type: spec
+canonical_title: ユースケース
+canonical_document: true
+-->
+
 [目次](../目次.md) > 要件定義 > SILとHILを実現するには
 
 # SILとHILを実現するには

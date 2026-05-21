@@ -1,3 +1,12 @@
+<!--
+HLDocS:LLM-MANAGED
+doc_id: doc-20260521-c84d91
+lang: ja-JP
+document_type: spec
+canonical_title: システム同定(sysid)をどう扱うか
+canonical_document: true
+-->
+
 [目次](../目次.md) > 要件定義 > システム同定(sysid)をどう扱うか
 
 # システム同定(sysid)をどう扱うか

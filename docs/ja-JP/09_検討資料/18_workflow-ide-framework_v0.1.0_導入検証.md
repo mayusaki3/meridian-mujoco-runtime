@@ -33,6 +33,43 @@ meridian-mujoco-runtime
 Framework は MuJoCo domain object や RuntimeSession を所有しない。
 UI frame lifetime と simulation / HIL control lifetime を同一にしない。
 
+## 2.1 各 Step の検証方法
+
+各 Step は前 Step の完成状態へ単純に積み上げて確認するだけではなく、**前 Step 適用前の基準状態へ戻してから、当該 Step までを再適用する**ことを基本とする。
+
+例えば Step 2 の検証では、Step 1 適用済みの作業ツリーへそのまま Step 2 を追加するだけでなく、Step 1 適用前の Meridian 基準状態から開始し、Step 1 と Step 2 を手順どおり再適用して成立することを確認する。
+
+```text
+Meridian baseline
+   |
+   +-- Step 1 検証
+   |
+   +-- baseline へ戻す
+          |
+          +-- Step 1 再適用
+          +-- Step 2 適用
+          +-- Step 2 検証
+          |
+          +-- baseline へ戻す
+                 |
+                 +-- Step 1 再適用
+                 +-- Step 2 再適用
+                 +-- Step 3 適用
+                 +-- ...
+```
+
+目的は、開発途中の残存ファイル、手作業、暗黙状態に依存して「たまたま動く」ことを防ぎ、Framework 利用手順そのものが再現可能であることを確認することである。
+
+各 Step では少なくとも次を確認する。
+
+- 基準状態から手順だけで再構築できる。
+- 前 Step で必要だった変更が手順に明記されている。
+- 未記録の手作業やローカル環境依存がない。
+- 前 Step の成果物を再利用する場合、その依存が明示されている。
+- Step 完了時の検証結果を記録できる。
+
+基準状態への復帰方法や検証用 branch / commit の具体運用は、実装開始時にリポジトリを壊さず反復できる方法を選定する。
+
 ## 3. Step 1: Framework 導入
 
 ### 仮実装

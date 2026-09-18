@@ -40,7 +40,7 @@ UI frame lifetime と simulation / HIL control lifetime を同一にしない。
 1. workflow-ide-framework repository: Framework + Framework sample を build / run する。
 2. meridian-mujoco-runtime repository: Framework + Meridian を build / run する。
 
-Framework sample は各 Step の最小基準実装、Meridian は実利用側の integration verification と位置付ける。両方が対象 Step の条件を満たして初めて、その Step の build / run 検証が成立したものとする。
+Framework sample は各 Step の最小基準実装、Meridian は v0.1.0 における実利用側の integration verification と位置付ける。Framework sample は今後の Framework バージョンでも継続する一方、実利用側プロジェクトはバージョンごとに変更してよい。両方が対象 Step の条件を満たして初めて、その Step の build / run 検証が成立したものとする。
 
 各 Step は前 Step の完成状態へ単純に積み上げて確認するだけではなく、**前 Step 適用前の基準状態へ戻してから、当該 Step までを再適用する**ことを基本とする。
 
@@ -171,7 +171,7 @@ Layout は Panel ID のみを参照し、Dock backend 固有型を Meridian 側�
 
 ## 7. Step 4 完了時の Framework 外部検証
 
-Step 4 までの Framework 基盤が成立した時点で、Framework 側の Probe Panel を含む verification build を利用し、利用可能な外部環境で基盤検証を行う。
+Step 4 までの Framework 基盤が成立した時点で、workflow-ide-framework 側だけが持つ Probe Panel を含む verification build を利用し、利用可能な外部環境で基盤検証を行う。Meridian 側には Probe Panel を実装・同梱しない。
 
 Meridian はこの時点では Step 5 の Panel 内部実装を完成させる必要はない。Application 起動、Panel 宣言、Layout、および Framework maintenance Probe が同一の Framework 利用形で成立することを確認する。
 

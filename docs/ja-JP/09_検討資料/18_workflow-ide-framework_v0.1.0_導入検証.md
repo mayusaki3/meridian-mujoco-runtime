@@ -35,6 +35,13 @@ UI frame lifetime と simulation / HIL control lifetime を同一にしない。
 
 ## 2.1 各 Step の検証方法
 
+全 Step で、次の二系統を独立した検証対象とする。
+
+1. workflow-ide-framework repository: Framework + Framework sample を build / run する。
+2. meridian-mujoco-runtime repository: Framework + Meridian を build / run する。
+
+Framework sample は各 Step の最小基準実装、Meridian は実利用側の integration verification と位置付ける。両方が対象 Step の条件を満たして初めて、その Step の build / run 検証が成立したものとする。
+
 各 Step は前 Step の完成状態へ単純に積み上げて確認するだけではなく、**前 Step 適用前の基準状態へ戻してから、当該 Step までを再適用する**ことを基本とする。
 
 例えば Step 2 の検証では、Step 1 適用済みの作業ツリーへそのまま Step 2 を追加するだけでなく、Step 1 適用前の Meridian 基準状態から開始し、Step 1 と Step 2 を手順どおり再適用して成立することを確認する。

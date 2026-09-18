@@ -125,7 +125,19 @@ Layout は Panel ID のみを参照し、Dock backend 固有型を Meridian 側�
 - 未宣言 Panel ID の検出。
 - Layout / Visibility 変更が simulation lifetime を直接変更しないこと。
 
-## 7. Step 1〜4 の検証成果物
+## 7. Step 4 完了時の Framework 外部検証
+
+Step 4 までの Framework 基盤が成立した時点で、Framework 側の Probe Panel を含む verification build を利用し、利用可能な外部環境で基盤検証を行う。
+
+Meridian はこの時点では Step 5 の Panel 内部実装を完成させる必要はない。Application 起動、Panel 宣言、Layout、および Framework maintenance Probe が同一の Framework 利用形で成立することを確認する。
+
+Probe Panel は既存 standalone Probe の置換ではなく統合フロントエンドとする。Framework が起動しない場合の切り分け用に standalone Probe も維持する。
+
+外部環境の協力者からは `○ / ✕ / ？`、環境情報、log、必要な手動確認結果を Export して受領できる構成を想定する。
+
+この検証を Step 5 以降の Rust API / callback / ownership 詳細設計へ進む前の中間マイルストーンとする。
+
+## 8. Step 1〜4 の検証成果物
 
 Meridian 側で仮実装を進める際、Framework API がまだ存在しない箇所は完成 API を推測して固定せず、必要な設定・型・責務を「要求」として記録する。
 
@@ -138,7 +150,7 @@ Meridian 側で仮実装を進める際、Framework API がまだ存在しない
 - Step 5 以降で決める事項
 - 未検証事項
 
-## 8. Step 5 以降への入口
+## 9. Step 5 以降への入口
 
 Step 1〜4 の検証後、次を順に具体化する。
 

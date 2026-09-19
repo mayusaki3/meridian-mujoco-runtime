@@ -98,13 +98,13 @@ TRACE output from eframe/wgpu was also observed during normal Application execut
 | Log配置 | ○ |
 | Help初期非表示 | ○ |
 | selected Simulation View | ○ |
-| split resize | ？ |
-| Window resize後のDock維持 | ？ |
+| split resize | ○ |
+| Window resize後のDock維持 | ○ |
 | backend Dock API非依存 | ○ |
 | wfide::tracing Consumer利用 | ○ |
 | Meridian固有ログ出力 | ○ |
 | console logging | ○ |
-| file logging | ？ |
+| file logging | ○ |
 | rotation設定適用 | ○ |
 | Log PanelとLoggingの分離 | ○ |
 | Linux | ？ |
@@ -112,7 +112,24 @@ TRACE output from eframe/wgpu was also observed during normal Application execut
 
 The supplied GUI screenshot confirms the expected Meridian initial nested Dock layout and that Help is not present. It also shows Simulation View as the main work area and the expected Panel IDs/kinds in each placeholder.
 
-The supplied console output confirms normal Framework tracing and the Meridian Consumer logging probe. File logging is intentionally left unverified until the generated file is directly checked. Split drag resize and Window resize persistence are also left unverified until explicitly exercised.
+The supplied console output confirms normal Framework tracing and the Meridian Consumer logging probe.
+
+Additional Windows 11 screenshots confirm that both horizontal and vertical split boundaries can be dragged to substantially different positions while the same four stable Panel IDs and nested Dock structure remain intact. A Window resize was also exercised and the Dock structure remained intact.
+
+File logging was directly verified with PowerShell. The generated file was:
+
+```text
+logs/meridian/meridian-meridian-mujoco-runtime.2026-09-19.log
+```
+
+`Select-String` found the Meridian Consumer event in that file at two observed runs:
+
+```text
+2026-09-19T13:19:20.228109Z INFO meridian::application: Meridian application logging probe
+2026-09-19T13:32:10.035718Z INFO meridian::application: Meridian application logging probe
+```
+
+The observed log file size was approximately 40 MB, consistent with the separately recorded observation that the current Framework TRACE-level configuration emits a large volume of eframe/wgpu internal traces.
 
 Daily rotation and maximum seven-file retention are verified as configuration/API application only. Actual day-boundary rotation, eighth-generation deletion, cross-restart retention and continued logging after rotation are deferred to the formal v0.1.0 test specification.
 

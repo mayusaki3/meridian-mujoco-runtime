@@ -1,0 +1,7 @@
+[package]
+name = "meridian-mujoco-runtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+workflow-ide-framework = { git = "https://github.com/mayusaki3/workflow-ide-framework", rev = "0f70f5d523fa8ec889a003f10b043cc3c12f96e2" }

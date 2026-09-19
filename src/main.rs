@@ -21,10 +21,6 @@ fn main() {
         .split_below("simulation-view", 0.75, ["log"])
         .selected("simulation-view");
 
-    wfide::tracing::info!(
-        target: "meridian::application",
-        "Meridian application starting"
-    );
 
     wfide::Application::with_config(config)
         .panel(wfide::PanelDefinition::new(

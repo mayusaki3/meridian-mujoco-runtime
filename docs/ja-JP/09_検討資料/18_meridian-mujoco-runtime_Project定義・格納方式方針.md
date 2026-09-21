@@ -58,25 +58,72 @@ Project は保存可能な定義・入力・結果を扱う。
 
 ### meridian.toml
 
-Project の入口となる manifest。
+Visual Studio の Project file に相当する Project Definition とする。
 
-Project の識別情報と、Project内で使用する主要Resourceへの参照を持つ。
+Project Definition は、次を明示的に定義する。
 
-個々のRobotやField等の詳細情報をすべて1ファイルへ集約することは目的としない。
+- このProjectが Meridian IDE Framework のProjectであること
+- 最後に正常保存した Meridian IDE Framework のversion
+- Project ID
+- Project名
+- Project自身のversion
+- 説明
+- 作成者
+- 権利・License情報
+- Projectに所属するResource
+- Projectに所属するAsset
 
-manifestの具体的なschemaは後続仕様で決定する。
+Project directory内にファイルが存在するだけではProject所属とはみなさず、Project Definitionへ登録されたResource / AssetをProject所属として扱う。
+
+Project Definitionに個々のRobotやField等の詳細情報をすべて集約することは目的としない。
+
+### Framework version と Project Format
+
+Project Format専用の独立したversionは持たない。
+
+Project Definitionに記録されたFramework versionを、そのProject DefinitionがどのFramework Formatで保存されたかを示すversionとして使用する。
+
+Project Definitionは将来のFrameworkとの互換範囲を宣言しない。将来のFrameworkが過去のProject Formatを読み込めるかどうかは、そのFramework側が判断する。
+
+新しいFrameworkで旧FormatのProjectを読み込み、必要な変換を行って正常保存した場合は、Project Definition内のFramework versionを保存に使用したFramework versionへ更新する。
+
+Project自身のversionはFramework versionとは別の情報であり、Project作者が管理する。
+
+概念例:
+
+```toml
+[framework]
+id = "meridian-ide-framework"
+version = "0.1.0"
+
+[project]
+id = "khr3hv-walking-test"
+name = "KHR-3HV Walking Test"
+version = "0.1.0"
+description = "KHR-3HV walking simulation project"
+authors = ["..."]
+license = "..."
+```
+
+具体的なschema、正式なFramework ID、Project Definitionのファイル名・拡張子は後続仕様で決定する。
 
 ### resources
 
-Projectを構成する意味のある定義を格納する。
+Projectを構成する意味のある定義を扱う。
 
-Robot、Actuator、Field、Scenario、Execution Profile等を想定する。
+Robot、Actuator、Field、Scenario、Execution Profile、URDF、MJCF等を想定する。
+
+Resourceの論理分類と物理ディレクトリ構造は分離する。Resourceを特定の `resources/<分類>/` 配下へ置くことをProject Format上の必須条件にはしない。
+
+Project Definitionへ明示的に登録されたResourceをProject所属として扱う。
 
 ### assets
 
-mesh、texture等、Resourceから参照される補助ファイルを格納する。
+mesh、texture等、Resourceから参照される補助ファイルを扱う。
 
-Resource側の既存ファイル構成を維持した方が適切な場合は、Resource配下にassetsを持つことも許容する方向で検討する。
+Assetの論理分類と物理ディレクトリ構造は分離する。既存URDF / MJCF等の相対参照関係を維持できるよう、Assetを特定の `assets/` 配下へ移動することをProject Format上の必須条件にはしない。
+
+Project Definitionへ明示的に登録されたAssetをProject所属として扱う。
 
 ### data
 
@@ -202,3 +249,11 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 8. Meridian独自Exchange Packageは今回定義しない。
 9. Project定義、RuntimeSession、IDE Workspace、生成結果を区別する。
 10. FrameworkはProjectのMuJoCo固有意味を所有しない。
+11. Project DefinitionはMeridian IDE FrameworkのProjectであることを識別できる情報を持つ。
+12. Project Definitionには最後に正常保存したFramework versionを記録する。
+13. Project Format専用の独立versionは持たず、Framework versionのFormatとして更新する。
+14. Project Definitionは将来のFramework互換範囲を宣言しない。
+15. 過去Formatを読み込めるか、必要な変換を行えるかはFramework側が判断する。
+16. Project directory内に存在するだけでは所属とせず、Resource / AssetはProject Definitionへ明示的に登録する。
+17. Resource / Assetの論理分類と物理ディレクトリ構造を分離する。
+18. Solution相当の上位Project集合概念は今回導入しない。

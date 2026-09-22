@@ -82,7 +82,13 @@ Project Definitionに個々のRobotやField等の詳細情報をすべて集約�
 
 Project Definitionの汎用的な読み書き、Resource / Asset管理、相対path解決、Format migration等の機構はFramework側へ持たせることができるが、利用者およびRuntimeから見たProjectの互換性はMeridian Applicationとして扱う。
 
-Project Definitionには、そのProjectを扱うMeridian Applicationを識別するための情報を持たせる方向とする。Application versionをProject Definitionへ記録するか、またそれをProject Formatの互換性判断にどう使用するかは、Application側のversion方針と合わせて後続仕様で決定する。
+Project Definitionには、そのProjectを扱うMeridian Applicationを識別するための情報と、最後に正常保存したApplication versionを必須情報として持たせる。
+
+このApplication versionを、そのProject DefinitionがどのApplication versionのProject Formatで保存されたかを示す情報として使用する。Project Format専用の独立versionは持たない。
+
+Project Definitionは将来のApplicationとの互換範囲を宣言しない。現在のApplicationが、記録された保存時Application versionのProject Formatを読み込めるか、必要なmigrationを実行できるかを判断する。
+
+新しいApplicationで旧Project Formatを読み込み、必要なmigrationを行って正常保存した場合は、Project Definition内のApplication versionを保存に使用したApplication versionへ更新する。
 
 Project自身のversionはApplication versionとは別の情報であり、Project作者が管理する。
 
@@ -91,6 +97,7 @@ Project自身のversionはApplication versionとは別の情報であり、Proje
 ```toml
 [application]
 id = "meridian-mujoco-runtime"
+version = "0.1.0"
 
 [project]
 id = "khr3hv-walking-test"
@@ -393,7 +400,10 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 12. Project Definitionには対象Meridian Applicationを識別する情報を持たせる。
 13. Projectの互換性はFramework単体ではなくMeridian Applicationとして扱う。
 14. Project Definitionの汎用的な読み書き・Resource / Asset管理・相対path解決・Format migration等の機構はFramework側へ共通化できる。
-15. Application versionのProject Definitionへの記録方法とProject Format互換性への利用方法は、Application側のversion方針と合わせて後続仕様で決定する。
+15. Project Definitionには最後に正常保存したApplication versionを必須情報として記録する。
+16. Project Format専用の独立versionは持たず、保存時Application versionをProject Formatの互換性判断に使用する。
+17. Project Definitionは将来のApplication互換範囲を宣言せず、現在のApplication側が保存時versionを元に読込可否・migration可否を判断する。
+18. migration後に正常保存した場合、Project DefinitionのApplication versionを保存に使用したversionへ更新する.
 16. Project directory内に存在するだけでは所属とせず、Resource / AssetはProject Definitionへ明示的に登録する。
 17. Resource / Assetの論理分類と物理ディレクトリ構造を分離する。
 18. Solution相当の上位Project集合概念は今回導入しない。

@@ -239,7 +239,135 @@ Projectは、そのような入力データを実際の作業・実行単位と�
 
 特に既存要件にある独自圧縮Export / Import形式については、今回の方針と合わせて後続で再検討する。
 
-## 9. Step 5との関係
+## 9. Project Definition の Resource / Asset 登録案
+
+Project Definitionでは、Projectに所属するResource / Assetを明示的に登録する。
+
+初期schemaでは、論理的な対象とファイル表現を混同しないため、Resourceに少なくとも次の情報を持たせる方向とする。
+
+- `id`: Project内で一意なResource識別子
+- `role`: Robot、Field、Actuator、Scenario等の論理的役割
+- `format`: Meridian内部形式、URDF、MJCF等の表現形式
+- `path`: Project rootを基準とする物理ファイルへの相対パス
+- `source`: 同一論理対象の正本Resourceを示す任意の参照
+
+`source`は、URDF / MJCF等がMeridian内部定義から生成・変換された表現であることを表せるようにするための候補である。具体的な名称と必須性は後続仕様で確定する。
+
+概念例:
+
+```toml
+[[resources]]
+id = "main-robot"
+role = "robot"
+format = "meridian"
+path = "robot/robot.toml"
+
+[[resources]]
+id = "main-robot-mjcf"
+role = "robot"
+format = "mjcf"
+path = "robot/robot.xml"
+source = "main-robot"
+
+[[resources]]
+id = "main-robot-urdf"
+role = "robot"
+format = "urdf"
+path = "robot/robot.urdf"
+source = "main-robot"
+```
+
+この例では3ファイルは同じRobotを表すが、`main-robot`を情報量の多いMeridian内部定義として扱い、MJCF / URDFはその交換・外部利用向け表現として関連付ける。
+
+Assetには、少なくとも次の情報を持たせる方向とする。
+
+- `id`: Project内で一意なAsset識別子
+- `role`: mesh、texture等の論理的役割
+- `format`: STL、OBJ、PNG等の表現形式
+- `path`: Project rootを基準とする物理ファイルへの相対パス
+- `generated`: Applicationによって生成された代替Asset等であることを示す任意情報
+
+概念例:
+
+```toml
+[[assets]]
+id = "body-mesh"
+role = "mesh"
+format = "stl"
+path = "robot/meshes/body.stl"
+
+[[assets]]
+id = "missing-hand-dummy"
+role = "mesh"
+format = "stl"
+path = ".meridian/generated/missing-hand.stl"
+generated = true
+```
+
+Resource / Assetの登録情報はProjectを構成するファイルを識別するための情報であり、RobotやMeshそのものの詳細仕様をProject Definitionへ重複記述することを目的としない。
+
+### 同一論理対象の複数表現
+
+同じRobot / Field等について、Meridian内部定義、URDF、MJCFを同時にProjectへ登録できる。
+
+```text
+Logical Robot
+  ├─ Meridian internal definition  ← canonical
+  ├─ MJCF                          ← exchange / MuJoCo
+  └─ URDF                          ← exchange
+```
+
+Project Definitionはこれらの所属と関係を管理するが、変換処理そのものはApplication側の責務とする。
+
+### Asset依存関係
+
+URDF / MJCF内部に記述されたmesh等への参照は、その交換形式自身が持つ情報として維持する。
+
+Project Definitionへ同じ参照関係をすべて二重記述することは必須としない。
+
+一方、参照先Asset自体はProject Definitionへ登録する。
+
+これによりApplicationはProject DefinitionからProject所属Assetを把握でき、URDF / MJCF解析時に次の検査を行える。
+
+```text
+Resource内のAsset参照
+        ↓
+参照先を解決
+        ↓
+Project Assetとして登録済みか
+        ↓
+実ファイルが存在するか
+        ↓
+利用可能 / 不足 / 不整合を判定
+```
+
+不足時にダミーAssetを生成する場合は、その生成物をProjectへ追加し、Project Definitionにも登録する。
+
+### Import時の登録
+
+URDF / MJCF Importでは、概念的に次の処理を行う。
+
+```text
+URDF / MJCF選択
+    ↓
+参照ファイル解析
+    ↓
+Resource本体をProjectへ取り込み・登録
+    ↓
+mesh等の関連AssetをProjectへ取り込み・登録
+    ↓
+不足Assetを検出
+    ↓
+必要に応じて代替Assetを生成・登録
+    ↓
+Meridian内部定義へ変換
+    ↓
+Meridian内部ResourceをProjectへ登録
+```
+
+利用者からは一つのImport操作として扱えることを目標とし、関連AssetのProject Definition登録を手作業で要求しない。
+
+## 10. Step 5との関係
 
 workflow-ide-framework Step 5では、このProject構造の全機能を実装しない。
 
@@ -253,7 +381,7 @@ Step 5 Consumer実装で必要になる範囲として、少なくとも次を�
 
 File Explorer、完全なImport / Export UI、Resource Inspector等はFramework側APIの進捗に応じて後続Stepで扱う。
 
-## 10. 今回確定する基本原則
+## 11. 今回確定する基本原則
 
 1. Meridian Projectは作業・実行の単位とする。
 2. Projectは原則自己完結とする。
@@ -279,3 +407,7 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 22. URDF / MJCF等から参照されるmesh・texture等もProject Assetとして登録対象とする。
 23. Import等によるResource / Asset登録はApplicationが自動化できる構造とし、利用者による全ファイルの手動登録を要求しない。
 24. 不足Assetに対して代替Assetを生成する場合も、生成物をProject Definitionへ登録してProjectから認識可能にする。
+25. Resource登録では、論理的役割・表現形式・物理パスを別の情報として扱う。
+26. 同一論理対象についてMeridian内部定義・MJCF・URDF等の複数表現を関連付けられる構造とする。
+27. Assetの参照関係をProject Definitionへ完全に二重記述することは必須とせず、URDF / MJCF等が持つ参照情報を利用できるようにする。
+28. Asset自体のProject所属はProject Definitionへの登録によって管理する。

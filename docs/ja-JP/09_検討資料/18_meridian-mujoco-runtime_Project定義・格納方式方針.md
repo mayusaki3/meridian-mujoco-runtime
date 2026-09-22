@@ -115,7 +115,13 @@ Robot、Actuator、Field、Scenario、Execution Profile、URDF、MJCF等を想�
 
 Resourceの論理分類と物理ディレクトリ構造は分離する。Resourceを特定の `resources/<分類>/` 配下へ置くことをProject Format上の必須条件にはしない。
 
+Meridian内部定義は、URDF / MJCFより多くの情報を保持できる正本として扱う方向とする。
+
+URDF / MJCFは主としてデータ交換、およびMuJoCo等の外部系へ渡す表現形式として位置付ける。ただし利用者から見ればProjectを構成するデータであるため、Meridian内部定義とURDF / MJCFをProject内で併存させてよい。
+
 Project Definitionへ明示的に登録されたResourceをProject所属として扱う。
+
+Resource登録では、Robot / Field等の「論理的な役割」と、Meridian内部形式 / URDF / MJCF等の「表現形式」を区別して扱える構造とする。具体的なschemaは後続仕様で決定する。
 
 ### assets
 
@@ -124,6 +130,12 @@ mesh、texture等、Resourceから参照される補助ファイルを扱う。
 Assetの論理分類と物理ディレクトリ構造は分離する。既存URDF / MJCF等の相対参照関係を維持できるよう、Assetを特定の `assets/` 配下へ移動することをProject Format上の必須条件にはしない。
 
 Project Definitionへ明示的に登録されたAssetをProject所属として扱う。
+
+URDF / MJCF等から参照されるmeshやtextureも、Projectを成立させるデータとしてProject Definitionへの登録対象とする。
+
+Import時などに交換形式から参照されるAssetを検出した場合、利用者が一つずつ登録することを必須とせず、ApplicationがProjectへの取り込みと登録を自動化できる構造とする。
+
+必要なAssetが存在しない場合は、エラーとして扱うだけでなく、用途に応じてダミーmesh等の代替Assetを生成してProjectを成立させる補助機能も検討する。生成した代替Assetを使用する場合もProject Definitionへ登録し、Projectから認識可能な状態とする。
 
 ### data
 
@@ -195,7 +207,11 @@ Import後のResourceはProject内へ取り込み、そのProjectだけで利用�
 - MJCF（MuJoCo XML）
 - 上記ファイルから参照され、対象を成立させるために必要なmesh等の関連ファイル
 
-初期段階では、これらをProject内へImportし、Project内のRobot / Field等のResourceとして扱えることを目標とする。
+初期段階では、これらをProject内へImportし、Meridian内部定義へ変換できることを目標とする。
+
+Import元のURDF / MJCF自体も、利用者から見たProject構成データとしてProject内へ保持し、Resourceとして登録してよい。Meridian内部定義と交換形式を二重に保持することを許容する。
+
+Import時にはURDF / MJCFから参照されるmesh等の関連Assetを検出し、Projectへ取り込んだものをProject Definitionへ登録することを基本とする。
 
 Projectから外部利用する場合も、まずはURDF / MJCF等の既存形式としてExport可能な範囲を対象とする。
 
@@ -257,3 +273,9 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 16. Project directory内に存在するだけでは所属とせず、Resource / AssetはProject Definitionへ明示的に登録する。
 17. Resource / Assetの論理分類と物理ディレクトリ構造を分離する。
 18. Solution相当の上位Project集合概念は今回導入しない。
+19. Meridian内部定義を情報量の多い正本とし、URDF / MJCFは主として交換・外部利用向け表現として扱う。
+20. Meridian内部定義とURDF / MJCF等の交換形式はProject内で併存してよい。
+21. Resourceの論理的な役割と表現形式を分離して管理できる構造とする。
+22. URDF / MJCF等から参照されるmesh・texture等もProject Assetとして登録対象とする。
+23. Import等によるResource / Asset登録はApplicationが自動化できる構造とし、利用者による全ファイルの手動登録を要求しない。
+24. 不足Assetに対して代替Assetを生成する場合も、生成物をProject Definitionへ登録してProjectから認識可能にする。

@@ -62,8 +62,7 @@ Visual Studio の Project file に相当する Project Definition とする。
 
 Project Definition は、次を明示的に定義する。
 
-- このProjectが Meridian IDE Framework のProjectであること
-- 最後に正常保存した Meridian IDE Framework のversion
+- このProjectが対象とするMeridian Applicationを識別する情報
 - Project ID
 - Project名
 - Project自身のversion
@@ -77,24 +76,21 @@ Project directory内にファイルが存在するだけではProject所属と�
 
 Project Definitionに個々のRobotやField等の詳細情報をすべて集約することは目的としない。
 
-### Framework version と Project Format
+### Application と Project Format
 
-Project Format専用の独立したversionは持たない。
+`workflow-ide-framework`はMeridian Applicationへ一体化される内部Frameworkとして扱うため、Project DefinitionへFramework IDやFramework versionを記録しない。
 
-Project Definitionに記録されたFramework versionを、そのProject DefinitionがどのFramework Formatで保存されたかを示すversionとして使用する。
+Project Definitionの汎用的な読み書き、Resource / Asset管理、相対path解決、Format migration等の機構はFramework側へ持たせることができるが、利用者およびRuntimeから見たProjectの互換性はMeridian Applicationとして扱う。
 
-Project Definitionは将来のFrameworkとの互換範囲を宣言しない。将来のFrameworkが過去のProject Formatを読み込めるかどうかは、そのFramework側が判断する。
+Project Definitionには、そのProjectを扱うMeridian Applicationを識別するための情報を持たせる方向とする。Application versionをProject Definitionへ記録するか、またそれをProject Formatの互換性判断にどう使用するかは、Application側のversion方針と合わせて後続仕様で決定する。
 
-新しいFrameworkで旧FormatのProjectを読み込み、必要な変換を行って正常保存した場合は、Project Definition内のFramework versionを保存に使用したFramework versionへ更新する。
-
-Project自身のversionはFramework versionとは別の情報であり、Project作者が管理する。
+Project自身のversionはApplication versionとは別の情報であり、Project作者が管理する。
 
 概念例:
 
 ```toml
-[framework]
-id = "meridian-ide-framework"
-version = "0.1.0"
+[application]
+id = "meridian-mujoco-runtime"
 
 [project]
 id = "khr3hv-walking-test"
@@ -105,7 +101,7 @@ authors = ["..."]
 license = "..."
 ```
 
-具体的なschema、正式なFramework ID、Project Definitionのファイル名・拡張子は後続仕様で決定する。
+具体的なschema、正式なApplication ID、Project Definitionのファイル名・拡張子は後続仕様で決定する。
 
 ### resources
 
@@ -393,11 +389,11 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 8. Meridian独自Exchange Packageは今回定義しない。
 9. Project定義、RuntimeSession、IDE Workspace、生成結果を区別する。
 10. FrameworkはProjectのMuJoCo固有意味を所有しない。
-11. Project DefinitionはMeridian IDE FrameworkのProjectであることを識別できる情報を持つ。
-12. Project Definitionには最後に正常保存したFramework versionを記録する。
-13. Project Format専用の独立versionは持たず、Framework versionのFormatとして更新する。
-14. Project Definitionは将来のFramework互換範囲を宣言しない。
-15. 過去Formatを読み込めるか、必要な変換を行えるかはFramework側が判断する。
+11. workflow-ide-frameworkはMeridian Applicationへ一体化される内部Frameworkとして扱い、Project DefinitionへFramework ID / versionを記録しない。
+12. Project Definitionには対象Meridian Applicationを識別する情報を持たせる。
+13. Projectの互換性はFramework単体ではなくMeridian Applicationとして扱う。
+14. Project Definitionの汎用的な読み書き・Resource / Asset管理・相対path解決・Format migration等の機構はFramework側へ共通化できる。
+15. Application versionのProject Definitionへの記録方法とProject Format互換性への利用方法は、Application側のversion方針と合わせて後続仕様で決定する。
 16. Project directory内に存在するだけでは所属とせず、Resource / AssetはProject Definitionへ明示的に登録する。
 17. Resource / Assetの論理分類と物理ディレクトリ構造を分離する。
 18. Solution相当の上位Project集合概念は今回導入しない。

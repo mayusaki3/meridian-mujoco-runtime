@@ -80,35 +80,37 @@ Project Definitionに個々のRobotやField等の詳細情報をすべて集約�
 
 `workflow-ide-framework`はMeridian Applicationへ一体化される内部Frameworkとして扱うため、Project DefinitionへFramework IDやFramework versionを記録しない。
 
-Project Definitionの汎用的な読み書き、Resource / Asset管理、相対path解決、Format migration等の機構はFramework側へ持たせることができるが、利用者およびRuntimeから見たProjectの互換性はMeridian Applicationとして扱う。
+Projectの永続化形式は、Framework所有領域とApplication所有領域で独立してversion管理する。
 
-Project Definitionには、そのProjectを扱うMeridian Applicationを識別するための情報と、最後に正常保存したApplication versionを必須情報として持たせる。
+- `project.format_version`: Frameworkが所有・解釈するProject形式version
+- `application.data_version`: Meridian Applicationが所有・解釈するApplication data形式version
 
-このApplication versionを、そのProject DefinitionがどのApplication versionのProject Formatで保存されたかを示す情報として使用する。Project Format専用の独立versionは持たない。
+Runtimeは、Projectを作成・保存したworkflow-ide-framework自体のversionを意識せず、Framework所有領域の互換性判断・migrationはFrameworkへ委ねる。これによりRuntimeが利用するFramework versionが更新されても、Runtime側へFramework Project形式の互換性処理を持ち込まない。
 
-Project Definitionは将来のApplicationとの互換範囲を宣言しない。現在のApplicationが、記録された保存時Application versionのProject Formatを読み込めるか、必要なmigrationを実行できるかを判断する。
+逆にFrameworkは`application.data_version`の意味を解釈しない。保存値をApplicationへ渡し、Applicationが実データを確認した上で互換性・変換可否・整合性を判断する。Application dataのmigrationはApplication側が所有する。
 
-新しいApplicationで旧Project Formatを読み込み、必要なmigrationを行って正常保存した場合は、Project Definition内のApplication versionを保存に使用したApplication versionへ更新する。
+Framework versionとApplication製品versionは、これらの永続化形式versionとは分離する。各所有者は、自身が担当する永続化形式について1つのversionを管理する。
 
-Project自身のversionはApplication versionとは別の情報であり、Project作者が管理する。
+Project作者が管理するProject自身のversionは、Project形式やApplication data形式のversionとは別のProject metadataとして扱う。
 
 概念例:
 
 ```toml
-[application]
-id = "meridian-mujoco-runtime"
-version = "0.1.0"
-
 [project]
+format_version = 1
 id = "khr3hv-walking-test"
 name = "KHR-3HV Walking Test"
 version = "0.1.0"
 description = "KHR-3HV walking simulation project"
 authors = ["..."]
 license = "..."
+
+[application]
+id = "meridian-mujoco-runtime"
+data_version = "1"
 ```
 
-具体的なschema、正式なApplication ID、Project Definitionのファイル名・拡張子は後続仕様で決定する。
+具体的なschema、正式なApplication ID、Project Definitionのファイル名・拡張子はworkflow-ide-frameworkの確定仕様との整合を確認しながら後続仕様で決定する。
 
 ### resources
 
@@ -397,23 +399,23 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 9. Project定義、RuntimeSession、IDE Workspace、生成結果を区別する。
 10. FrameworkはProjectのMuJoCo固有意味を所有しない。
 11. workflow-ide-frameworkはMeridian Applicationへ一体化される内部Frameworkとして扱い、Project DefinitionへFramework ID / versionを記録しない。
-12. Project Definitionには対象Meridian Applicationを識別する情報を持たせる。
-13. Projectの互換性はFramework単体ではなくMeridian Applicationとして扱う。
-14. Project Definitionの汎用的な読み書き・Resource / Asset管理・相対path解決・Format migration等の機構はFramework側へ共通化できる。
-15. Project Definitionには最後に正常保存したApplication versionを必須情報として記録する。
-16. Project Format専用の独立versionは持たず、保存時Application versionをProject Formatの互換性判断に使用する。
-17. Project Definitionは将来のApplication互換範囲を宣言せず、現在のApplication側が保存時versionを元に読込可否・migration可否を判断する。
-18. migration後に正常保存した場合、Project DefinitionのApplication versionを保存に使用したversionへ更新する.
-16. Project directory内に存在するだけでは所属とせず、Resource / AssetはProject Definitionへ明示的に登録する。
-17. Resource / Assetの論理分類と物理ディレクトリ構造を分離する。
-18. Solution相当の上位Project集合概念は今回導入しない。
-19. Meridian内部定義を情報量の多い正本とし、URDF / MJCFは主として交換・外部利用向け表現として扱う。
-20. Meridian内部定義とURDF / MJCF等の交換形式はProject内で併存してよい。
-21. Resourceの論理的な役割と表現形式を分離して管理できる構造とする。
-22. URDF / MJCF等から参照されるmesh・texture等もProject Assetとして登録対象とする。
-23. Import等によるResource / Asset登録はApplicationが自動化できる構造とし、利用者による全ファイルの手動登録を要求しない。
-24. 不足Assetに対して代替Assetを生成する場合も、生成物をProject Definitionへ登録してProjectから認識可能にする。
-25. Resource登録では、論理的役割・表現形式・物理パスを別の情報として扱う。
-26. 同一論理対象についてMeridian内部定義・MJCF・URDF等の複数表現を関連付けられる構造とする。
-27. Assetの参照関係をProject Definitionへ完全に二重記述することは必須とせず、URDF / MJCF等が持つ参照情報を利用できるようにする。
-28. Asset自体のProject所属はProject Definitionへの登録によって管理する。
+12. Framework所有Project形式は `project.format_version` で管理し、Frameworkだけが解釈・互換性判断・migrationを担当する。
+13. Runtimeは利用しているFramework versionをProject互換性のために意識しない。
+14. Application所有data形式は `application.data_version` で管理し、Applicationだけが解釈・互換性判断・migrationを担当する。
+15. Frameworkは `application.data_version` の意味を解釈せず、Applicationへ渡す。
+16. Framework version、Application製品version、永続化形式versionを分離し、各所有者は担当する永続化形式について1つのversionを管理する。
+17. Project Definitionには対象Meridian Applicationを識別するstable Application IDを持たせる。
+18. Project作者が管理するProject自身のversionは、Project形式・Application data形式のversionとは別のmetadataとする。
+19. Project directory内に存在するだけでは所属とせず、Resource / AssetはProject Definitionへ明示的に登録する。
+20. Resource / Assetの論理分類と物理ディレクトリ構造を分離する。
+21. Solution相当の上位Project集合概念は今回導入しない。
+22. Meridian内部定義を情報量の多い正本とし、URDF / MJCFは主として交換・外部利用向け表現として扱う。
+23. Meridian内部定義とURDF / MJCF等の交換形式はProject内で併存してよい。
+24. Resourceの論理的な役割と表現形式を分離して管理できる構造とする。
+25. URDF / MJCF等から参照されるmesh・texture等もProject Assetとして登録対象とする。
+26. Import等によるResource / Asset登録はApplicationが自動化できる構造とし、利用者による全ファイルの手動登録を要求しない。
+27. 不足Assetに対して代替Assetを生成する場合も、生成物をProject Definitionへ登録してProjectから認識可能にする。
+28. Resource登録では、論理的役割・表現形式・物理パスを別の情報として扱う。
+29. 同一論理対象についてMeridian内部定義・MJCF・URDF等の複数表現を関連付けられる構造とする。
+30. Assetの参照関係をProject Definitionへ完全に二重記述することは必須とせず、URDF / MJCF等が持つ参照情報を利用できるようにする。
+31. Asset自体のProject所属はProject Definitionへの登録によって管理する。

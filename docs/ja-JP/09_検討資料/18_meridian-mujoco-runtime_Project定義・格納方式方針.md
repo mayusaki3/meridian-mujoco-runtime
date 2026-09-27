@@ -43,7 +43,7 @@ Project は保存可能な定義・入力・結果を扱う。
 
 ```text
 <project>/
-├─ meridian.toml
+├─ project.toml
 ├─ resources/
 │  ├─ robots/
 │  ├─ actuators/
@@ -56,23 +56,15 @@ Project は保存可能な定義・入力・結果を扱う。
 └─ .meridian/
 ```
 
-### meridian.toml
+### project.toml
 
-Visual Studio の Project file に相当する Project Definition とする。
+Visual Studio の Project file に相当するProject Definitionとして、workflow-ide-frameworkの `project.toml` を使用する。Runtime独自の `meridian.toml` は設けない。
 
-Project Definition は、次を明示的に定義する。
+Project DefinitionのFramework共通metadata、Application識別、Project lifecycle、Resource RegistryはFrameworkの公開契約を使用する。
 
-- このProjectが対象とするMeridian Applicationを識別する情報
-- Project ID
-- Project名
-- Project自身のversion
-- 説明
-- 作成者
-- 権利・License情報
-- Projectに所属するResource
-- Projectに所属するAsset
+Runtime固有のRobot、Actuator、Field、Scenario等のdomain dataはApplication所有領域へ保存し、Frameworkはその内容を解釈しない。
 
-Project directory内にファイルが存在するだけではProject所属とはみなさず、Project Definitionへ登録されたResource / AssetをProject所属として扱う。
+Project directory内にファイルが存在するだけではProject所属とはみなさず、FrameworkのResource Registryへ登録されたResourceをProject所属として扱う。
 
 Project Definitionに個々のRobotやField等の詳細情報をすべて集約することは目的としない。
 
@@ -124,9 +116,11 @@ Meridian内部定義は、URDF / MJCFより多くの情報を保持できる正�
 
 URDF / MJCFは主としてデータ交換、およびMuJoCo等の外部系へ渡す表現形式として位置付ける。ただし利用者から見ればProjectを構成するデータであるため、Meridian内部定義とURDF / MJCFをProject内で併存させてよい。
 
-Project Definitionへ明示的に登録されたResourceをProject所属として扱う。
+Project Resourceはworkflow-ide-frameworkのResource Registryへ登録されたものをProject所属として扱う。
 
-Resource登録では、Robot / Field等の「論理的な役割」と、Meridian内部形式 / URDF / MJCF等の「表現形式」を区別して扱える構造とする。具体的なschemaは後続仕様で決定する。
+Framework共通のRegistry entryはstable `resource_id` と `ResourceReference` を持ち、Project ScopeではFrameworkが管理するProject Resource Rootからの相対pathを使用する。
+
+Robot / Field等の「論理的な役割」、Meridian内部形式 / URDF / MJCF等の「表現形式」、同一論理対象間の関係はRuntime固有metadataとしてApplication側が所有する。FrameworkのResourceEntryへMuJoCo固有schemaを追加することを前提としない。
 
 ### assets
 
@@ -134,13 +128,13 @@ mesh、texture等、Resourceから参照される補助ファイルを扱う。
 
 Assetの論理分類と物理ディレクトリ構造は分離する。既存URDF / MJCF等の相対参照関係を維持できるよう、Assetを特定の `assets/` 配下へ移動することをProject Format上の必須条件にはしない。
 
-Project Definitionへ明示的に登録されたAssetをProject所属として扱う。
+AssetもFramework上ではProject ResourceとしてResource Registryへ登録し、Assetであることやmesh / texture等の意味はRuntime側で管理する。
 
-URDF / MJCF等から参照されるmeshやtextureも、Projectを成立させるデータとしてProject Definitionへの登録対象とする。
+URDF / MJCF等から参照されるmeshやtextureも、Projectを成立させるデータとしてResource Registryへの登録対象とする。
 
 Import時などに交換形式から参照されるAssetを検出した場合、利用者が一つずつ登録することを必須とせず、ApplicationがProjectへの取り込みと登録を自動化できる構造とする。
 
-必要なAssetが存在しない場合は、エラーとして扱うだけでなく、用途に応じてダミーmesh等の代替Assetを生成してProjectを成立させる補助機能も検討する。生成した代替Assetを使用する場合もProject Definitionへ登録し、Projectから認識可能な状態とする。
+必要なAssetが存在しない場合は、エラーとして扱うだけでなく、用途に応じてダミーmesh等の代替Assetを生成してProjectを成立させる補助機能も検討する。生成した代替Assetを使用する場合もResource Registryへ登録し、Projectから認識可能な状態とする。
 
 ### data
 
@@ -216,7 +210,7 @@ Import後のResourceはProject内へ取り込み、そのProjectだけで利用�
 
 Import元のURDF / MJCF自体も、利用者から見たProject構成データとしてProject内へ保持し、Resourceとして登録してよい。Meridian内部定義と交換形式を二重に保持することを許容する。
 
-Import時にはURDF / MJCFから参照されるmesh等の関連Assetを検出し、Projectへ取り込んだものをProject Definitionへ登録することを基本とする。
+Import時にはURDF / MJCFから参照されるmesh等の関連Assetを検出し、Projectへ取り込んだものをResource Registryへ登録することを基本とする。
 
 Projectから外部利用する場合も、まずはURDF / MJCF等の既存形式としてExport可能な範囲を対象とする。
 
@@ -244,72 +238,33 @@ Projectは、そのような入力データを実際の作業・実行単位と�
 
 特に既存要件にある独自圧縮Export / Import形式については、今回の方針と合わせて後続で再検討する。
 
-## 9. Project Definition の Resource / Asset 登録案
+## 9. Framework Resource Registry と Runtime domain metadata
 
-Project Definitionでは、Projectに所属するResource / Assetを明示的に登録する。
+Project所属ファイルの登録はworkflow-ide-frameworkのResource Registryを使用し、Runtime独自のResource / Asset registryを重複して設けない。
 
-初期schemaでは、論理的な対象とファイル表現を混同しないため、Resourceに少なくとも次の情報を持たせる方向とする。
+Framework共通entryは概念的に次の情報を持つ。
 
-- `id`: Project内で一意なResource識別子
-- `role`: Robot、Field、Actuator、Scenario等の論理的役割
-- `format`: Meridian内部形式、URDF、MJCF等の表現形式
-- `path`: Project rootを基準とする物理ファイルへの相対パス
-- `source`: 同一論理対象の正本Resourceを示す任意の参照
-
-`source`は、URDF / MJCF等がMeridian内部定義から生成・変換された表現であることを表せるようにするための候補である。具体的な名称と必須性は後続仕様で確定する。
-
-概念例:
-
-```toml
-[[resources]]
-id = "main-robot"
-role = "robot"
-format = "meridian"
-path = "robot/robot.toml"
-
-[[resources]]
-id = "main-robot-mjcf"
-role = "robot"
-format = "mjcf"
-path = "robot/robot.xml"
-source = "main-robot"
-
-[[resources]]
-id = "main-robot-urdf"
-role = "robot"
-format = "urdf"
-path = "robot/robot.urdf"
-source = "main-robot"
+```text
+ResourceEntry
+├─ resource_id
+└─ ResourceReference
+   ├─ scope
+   └─ path
 ```
 
-この例では3ファイルは同じRobotを表すが、`main-robot`を情報量の多いMeridian内部定義として扱い、MJCF / URDFはその交換・外部利用向け表現として関連付ける。
+Project内のRobot、MJCF、URDF、mesh等はいずれもFrameworkから見ればResourceである。
 
-Assetには、少なくとも次の情報を持たせる方向とする。
+一方、次の情報はMuJoCo / Runtime domainの意味であるためApplication側が所有する。
 
-- `id`: Project内で一意なAsset識別子
-- `role`: mesh、texture等の論理的役割
-- `format`: STL、OBJ、PNG等の表現形式
-- `path`: Project rootを基準とする物理ファイルへの相対パス
-- `generated`: Applicationによって生成された代替Asset等であることを示す任意情報
+- Robot、Field、Actuator、Scenario、Asset等の論理的役割
+- Meridian内部形式、URDF、MJCF、STL、OBJ等の表現形式
+- 同一論理対象のcanonical / derived / exchange表現の関係
+- Application生成Assetであること
+- Resource間のdomain依存関係
 
-概念例:
+Runtime側はFrameworkのstable `resource_id` を参照してこれらのdomain metadataを関連付ける。具体的なApplication data schemaは後続仕様で決定する。
 
-```toml
-[[assets]]
-id = "body-mesh"
-role = "mesh"
-format = "stl"
-path = "robot/meshes/body.stl"
-
-[[assets]]
-id = "missing-hand-dummy"
-role = "mesh"
-format = "stl"
-path = ".meridian/generated/missing-hand.stl"
-generated = true
-```
-
-Resource / Assetの登録情報はProjectを構成するファイルを識別するための情報であり、RobotやMeshそのものの詳細仕様をProject Definitionへ重複記述することを目的としない。
+この分離により、FrameworkのResource RegistryをProject所属とfilesystem整合性の正本とし、Runtime側はResourceの意味だけを管理する。
 
 ### 同一論理対象の複数表現
 
@@ -330,7 +285,7 @@ URDF / MJCF内部に記述されたmesh等への参照は、その交換形式�
 
 Project Definitionへ同じ参照関係をすべて二重記述することは必須としない。
 
-一方、参照先Asset自体はProject Definitionへ登録する。
+一方、参照先Asset自体はResource Registryへ登録する。
 
 これによりApplicationはProject DefinitionからProject所属Assetを把握でき、URDF / MJCF解析時に次の検査を行える。
 
@@ -346,7 +301,7 @@ Project Assetとして登録済みか
 利用可能 / 不足 / 不整合を判定
 ```
 
-不足時にダミーAssetを生成する場合は、その生成物をProjectへ追加し、Project Definitionにも登録する。
+不足時にダミーAssetを生成する場合は、その生成物をProjectへ追加し、Resource Registryにも登録する。
 
 ### Import時の登録
 
@@ -370,7 +325,7 @@ Meridian内部定義へ変換
 Meridian内部ResourceをProjectへ登録
 ```
 
-利用者からは一つのImport操作として扱えることを目標とし、関連AssetのProject Definition登録を手作業で要求しない。
+利用者からは一つのImport操作として扱えることを目標とし、関連AssetのResource Registry登録を手作業で要求しない。
 
 ## 10. Step 5との関係
 
@@ -414,7 +369,7 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 24. Resourceの論理的な役割と表現形式を分離して管理できる構造とする。
 25. URDF / MJCF等から参照されるmesh・texture等もProject Assetとして登録対象とする。
 26. Import等によるResource / Asset登録はApplicationが自動化できる構造とし、利用者による全ファイルの手動登録を要求しない。
-27. 不足Assetに対して代替Assetを生成する場合も、生成物をProject Definitionへ登録してProjectから認識可能にする。
+27. 不足Assetに対して代替Assetを生成する場合も、生成物をResource Registryへ登録してProjectから認識可能にする。
 28. Resource登録では、論理的役割・表現形式・物理パスを別の情報として扱う。
 29. 同一論理対象についてMeridian内部定義・MJCF・URDF等の複数表現を関連付けられる構造とする。
 30. Assetの参照関係をProject Definitionへ完全に二重記述することは必須とせず、URDF / MJCF等が持つ参照情報を利用できるようにする。

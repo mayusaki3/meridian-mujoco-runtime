@@ -230,13 +230,40 @@ Projectから外部利用する場合も、まずはURDF / MJCF等の既存形�
 
 ## 8. Projectと既存MuJoCoデータセット概念の関係
 
-既存要件では、MJCF、URDF、mesh、Runtimeデータ等を含む「MuJoCoデータセット」を選択・統合してRuntime用データを構築する考え方が定義されている。
+既存要件の「MuJoCoデータセット」は、MJCF、URDF、mesh、Runtimeデータ等をひとまとまりの流通・選択単位として扱う初期構想である。
 
-Projectは、そのような入力データを実際の作業・実行単位として保持し、組み合わせる上位の単位として扱う方向とする。
+現在のProject / Resourceモデルでは、この概念を単一の物理folderや独自packageとしてProjectの基礎単位にはしない。役割を次のように分解する。
 
-既存の「MuJoCoデータセット」という用語・要件を直ちに置き換えず、Project / Resource / MuJoCoデータセットの最終的な用語整理は別途行う。
+```text
+Meridian Project
+  ├─ Framework Resource Registry
+  │   ├─ MJCF Resource
+  │   ├─ URDF Resource
+  │   ├─ mesh / texture Resource
+  │   └─ その他のProject Resource
+  │
+  └─ RuntimeProjectData
+      ├─ Robot / Field / Actuator等のlogical object
+      ├─ ResourceのRuntime固有metadata
+      └─ logical objectとResourceの関係
+```
 
-特に既存要件にある独自圧縮Export / Import形式については、今回の方針と合わせて後続で再検討する。
+従来「MuJoCoデータセット」が担っていた機能は、次の責務へ読み替える方向とする。
+
+- Project内で使用するfileの所属・path・存在状態: Framework Resource Registry
+- Robot / Field / Actuator等としての意味: RuntimeProjectData
+- MJCF / URDF / mesh等の表現形式: Runtime側Resource metadata
+- 複数Resourceの組み合わせ: Scenario等のRuntime domain definition
+- MuJoCo実行用MJCF / Runtime dataの生成: Runtimeのbuild処理
+- 外部との交換: URDF / MJCFおよび必要な関連fileのImport / Export
+
+したがって、既存要件の「カテゴリ毎にMuJoCoデータセットを選択し、複数データセットからRuntime用データを構築する」という利用目的は維持できるが、その選択対象はfolder/packageそのものではなく、Project内のlogical object / Resourceへ再定義する方向とする。
+
+既存要件にある `Identification.json` は、Project所属管理やResource識別の正本としては使用しない。Project所属とResource identityはFramework Resource Registry、domain上の識別・説明・関係はRuntimeProjectDataが担当する。交換元fileとして既存データに含まれる場合の扱いはImport仕様で別途決定する。
+
+また、既存要件の「folderごとzip圧縮し拡張子をrenameする独自Export / Import形式」は現在の方針とは一致しない。今回の初期Export / Importでは独自packageを定義せず、URDF / MJCFと必要な関連fileを対象とする。
+
+この整理を要件定義へ反映する際は、「MuJoCoデータセット」という用語を単純置換するのではなく、利用者が必要とする選択・組み合わせ・Runtime build・交換能力をProject / Resource / RuntimeProjectDataへ分解して要件を書き直す。
 
 ## 9. Framework Resource Registry と Runtime domain metadata
 
@@ -462,3 +489,6 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 33. Runtime固有Resource metadataはFrameworkのstable `resource_id` に関連付け、filesystem pathを重複して正本管理しない。
 34. Robot等のlogical object identityと、そのMeridian内部形式・MJCF・URDF等のResource表現を分離する。
 35. 検討資料08のdomain分離方針は継続候補とするが、`RuntimeProject` とpath直接保持はFramework Project / Resource Registryへ合わせて再構成する。
+36. 既存の「MuJoCoデータセット」は単一folder/packageをProject基礎単位とせず、所属管理・domain意味・Resource表現・組み合わせ・Runtime buildへ責務を分解する。
+37. `Identification.json` をProject所属やResource identityの正本にはせず、Framework Resource RegistryとRuntimeProjectDataを正本とする。
+38. 既存要件の独自zip派生packageは初期Export / Import方式として採用せず、URDF / MJCFと必要な関連fileを対象とする。

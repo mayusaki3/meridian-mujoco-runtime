@@ -327,7 +327,91 @@ Meridian内部ResourceをProjectへ登録
 
 利用者からは一つのImport操作として扱えることを目標とし、関連AssetのResource Registry登録を手作業で要求しない。
 
-## 10. Step 5との関係
+## 10. Runtime Application data の最小構造
+
+workflow-ide-frameworkがProject lifecycleとResource Registryを所有するため、Runtime側のApplication dataはProject filesystemの再管理ではなく、Runtime domainの意味とResource間関係を保持する。
+
+初期の最小構造は次を候補とする。
+
+```text
+RuntimeProjectData
+├─ resource_metadata
+│  └─ resource_id -> RuntimeResourceMetadata
+├─ logical_objects
+│  ├─ RobotDefinition
+│  ├─ ActuatorDefinition
+│  ├─ FieldDefinition
+│  ├─ ScenarioDefinition
+│  └─ ExecutionProfile
+└─ relationships
+   └─ logical object / resource_id 間の関係
+```
+
+`RuntimeProjectData` はFrameworkのProjectそのものを表す別Project objectではなく、Frameworkの `application/` 領域に保存するRuntime固有dataのrootとする。
+
+### Resource metadata
+
+Runtime固有metadataはFrameworkのstable `resource_id` をkeyとしてResource Registry entryへ関連付ける。
+
+概念例:
+
+```json
+{
+  "resource_metadata": {
+    "res-main-robot": {
+      "role": "robot",
+      "format": "meridian",
+      "logical_object_id": "robot-main",
+      "representation": "canonical"
+    },
+    "res-main-robot-mjcf": {
+      "role": "robot",
+      "format": "mjcf",
+      "logical_object_id": "robot-main",
+      "representation": "exchange"
+    },
+    "res-body-mesh": {
+      "role": "asset",
+      "asset_type": "mesh",
+      "format": "stl",
+      "generated": false
+    }
+  }
+}
+```
+
+Runtime側metadataにはfilesystem pathを重複保存しない。path、Scope、Missing等のfilesystem上の状態はFrameworkのResource Registry / ResourceReferenceを参照する。
+
+### Logical object
+
+RobotDefinition等のdomain objectはResource fileそのものと同一視しない。一つのLogical RobotにMeridian内部表現、MJCF、URDF等の複数Resourceを関連付けられる。
+
+```text
+RobotDefinition: robot-main
+  ├─ res-main-robot       : canonical / meridian
+  ├─ res-main-robot-mjcf  : exchange / mjcf
+  └─ res-main-robot-urdf  : exchange / urdf
+```
+
+これにより交換形式を追加・再生成してもRobot identityを維持できる。
+
+### 既存データ構造案との関係
+
+検討資料08の `RuntimeProject` は、Framework導入前のProject root object案であるため、そのままProject所有者として採用しない。
+
+一方、`RobotDefinition`、`ActuatorDefinition`、`FieldDefinition`、`ScenarioDefinition`、`ExecutionProfile`等のdomain分離方針は継続候補とする。
+
+検討資料08にある `model_uri` 等のfilesystem path直接保持は、Framework Resource Registryとの重複を避けるため、原則としてstable `resource_id` 参照へ置き換える方向とする。
+
+`RuntimeSession` は実行時状態であり、RuntimeProjectDataの永続domain definitionとは分離する。保存対象となる結果・記録はProjectの結果dataとして別途扱う。
+
+### Application data_version
+
+このApplication data構造の互換性はRuntimeが `application.data_version` で管理する。
+
+`data_version` はRuntime製品versionではなく、Runtime所有Application dataの形式versionである。Frameworkは値を保存・受け渡しするが意味を解釈しない。
+
+## 11. Step 5との関係
 
 workflow-ide-framework Step 5では、このProject構造の全機能を実装しない。
 
@@ -341,7 +425,7 @@ Step 5 Consumer実装で必要になる範囲として、少なくとも次を�
 
 File Explorer、完全なImport / Export UI、Resource Inspector等はFramework側APIの進捗に応じて後続Stepで扱う。
 
-## 11. 今回確定する基本原則
+## 12. 今回確定する基本原則
 
 1. Meridian Projectは作業・実行の単位とする。
 2. Projectは原則自己完結とする。
@@ -373,4 +457,8 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 28. Resource登録では、論理的役割・表現形式・物理パスを別の情報として扱う。
 29. 同一論理対象についてMeridian内部定義・MJCF・URDF等の複数表現を関連付けられる構造とする。
 30. Assetの参照関係をProject Definitionへ完全に二重記述することは必須とせず、URDF / MJCF等が持つ参照情報を利用できるようにする。
-31. Asset自体のProject所属はProject Definitionへの登録によって管理する。
+31. Asset自体のProject所属はResource Registryへの登録によって管理する。
+32. Runtime Application dataはFramework Projectとは別のProject objectを持たず、Frameworkの `application/` 領域にRuntime固有domain dataを保持する。
+33. Runtime固有Resource metadataはFrameworkのstable `resource_id` に関連付け、filesystem pathを重複して正本管理しない。
+34. Robot等のlogical object identityと、そのMeridian内部形式・MJCF・URDF等のResource表現を分離する。
+35. 検討資料08のdomain分離方針は継続候補とするが、`RuntimeProject` とpath直接保持はFramework Project / Resource Registryへ合わせて再構成する。

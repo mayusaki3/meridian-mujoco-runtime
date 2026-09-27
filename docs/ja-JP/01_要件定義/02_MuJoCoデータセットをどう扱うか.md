@@ -11,48 +11,92 @@ canonical_document: true
 
 # MuJoCoデータセットをどう扱うか
 
-MuJoCo は、ロボットや物理環境を定義し、物理シミュレーションを実行するための物理エンジンで、起動時に静的な情報をファイルで入力できる。  （動的な情報はAPI呼び出しで入力する）
+MuJoCoは、ロボットや物理環境を定義して物理シミュレーションを実行するための物理エンジンである。
 
-本システムは シミュレーション Runtime 機能を持ち、以下のように動作する想定。
+本システムでは、ロボット、フィールド、アクチュエーター、物理設定等のシミュレーションに必要なデータをProject内で管理し、利用者が必要な対象を選択・組み合わせてシミュレーションを構築できるようにする。
 
-入力
-- MuJoCoデータセット（複数）  
-  個々のMuJoCoデータセットを流通させたい。  
-  カテゴリ毎（フィールド、ロボット、物理設定等）に選択して使用する。
+従来「MuJoCoデータセット」と呼んでいた単一のfolder/packageをシステムの基礎単位とはせず、Project、Resource、およびRuntime固有の論理定義として扱う。
 
-準備
-- 選択されたMuJoCoデータセットからシミュレーション用データセットを構築
-  - MuJoCoに与える Runtime MJCF をビルド（MJCFやURDF等から統合）
-  - Runtime用JSONデータをビルド（MJCFのcustom情報等から統合）
+## 入力データの要件
 
-実行
-- MuJoCo に Runtime MJCF を渡し起動
-- Runtime がシミュレーションを実行  
-  ここでモーション再生や実マイコンとの中継や同期などを制御する。
-- 必要に応じ、元のMuJoCoデータセットにフィードバック  
-  sysidでは、同定結果を書き込む等。
+利用者はProject内で、用途に応じて次のような対象を扱えること。
 
-## MuJoCoデータセットの要件
+- Robot
+- Actuator
+- Field
+- Scenario / Task
+- Execution Profile
+- MJCF
+- URDF
+- mesh、texture等の関連Asset
+- Runtimeが必要とするその他の入力データ
 
-MuJoCoデータセットは、ファイルシステム上ではフォルダ階層を持ったファイルの集合体で、以下のような情報を持たせる。
+同一のRobotやFieldについて、Meridian内部定義とMJCF / URDF等の複数表現をProject内に保持できること。
 
-- Identification.json  
-  MuJoCoデータセット自体の情報で、内容の説明やファイル構成などを記録する。  
-  この情報を使い、フィールドの選択等を行う。
-- MJCF（複数）  
-  MuJoCo が扱うデータ。custom情報として Runtime固有の情報を記録できる。
-  フィールドやロボット、アクチェーターなどを定義する。
-- URDF（複数）  
-  ROSユーザー向けロボット定義。アクチェーターなどはMJCF側に定義が必要。
-- メッシュ  
-  フィールドやロボットのシミュレーター上の外観を定義。
-- Runtimeデータ  
-  モーションデータ、Plugin設定、同期設定など、Runtimeがサポートする機能用のデータ。
-- その他（複数）  
-  例えば実行ログの共有などを想定。
+Projectを構成するResourceは明示的に登録され、単にProject directory内にfileが存在することとProjectへの所属を区別できること。
 
-MuJoCoデータセットの流通は、このセット単位を想定している。  
-本システムからエクスポート/インポートを可能とし、内容はフォルダごとzipで圧縮して拡張子をリネームする形。
+Resourceの論理的な役割と物理的なfile配置を分離して扱えること。
+
+## 選択・組み合わせの要件
+
+利用者は、Projectに登録されたRobot、Field、Actuator等を用途に応じて選択し、組み合わせてシミュレーションを構成できること。
+
+同じRobotを異なるFieldで使用する、同じRobotへ異なるActuator設定を適用する等、定義の再利用が可能であること。
+
+選択・組み合わせの結果から、RuntimeがMuJoCo実行に必要なデータを構築できること。
+
+## Runtime用データ構築の要件
+
+Runtimeは、選択された定義・ResourceからMuJoCoへ渡す実行用データを構築できること。
+
+少なくとも次を扱えること。
+
+- MJCF / URDF等からMuJoCo実行に必要なモデルを構築する
+- Meridian固有のRuntime情報を統合する
+- mesh等の関連Resourceを解決する
+- Resource不足や不整合を検出する
+
+MuJoCo実行用に生成されるデータと、利用者がProjectで管理する元の定義・Resourceを区別できること。
+
+## ResourceとAssetの要件
+
+MJCF / URDF等から参照されるmesh、texture等もProjectを成立させるResourceとして扱えること。
+
+関連Assetが不足している場合は不足を検出できること。
+
+用途上可能な場合は、ダミーmesh等の代替Resourceを生成してProjectへ追加できること。
+
+## Import / Exportの要件
+
+初期段階では、既存の交換形式を利用してProjectへデータをImportし、ProjectからExportできることを目標とする。
+
+対象は次とする。
+
+- URDF
+- MJCF（MuJoCo XML）
+- 上記から参照され、対象を成立させるために必要なmesh等の関連file
+
+Import時は、URDF / MJCF本体だけでなく必要な関連fileもProjectへ取り込み、利用者が関連fileを一つずつ手動登録しなくても利用可能な状態にできること。
+
+Import元のURDF / MJCFと、そこから生成・変換したMeridian内部定義はProject内で併存できること。
+
+独自のMeridian Exchange Packageや、folderをzip圧縮して独自拡張子へrenameする方式は、初期要件には含めない。
+
+## Projectの自己完結性
+
+通常のProject利用では、Project外のMeridian固有共有directoryや特定PCの絶対pathを必須としないこと。
+
+Project内Resource間の依存関係は、Projectを別の保存場所や別PCへ移動しても解決可能な構成を基本とする。
+
+Project外Resourceへの常時参照や自動同期を、Resource再利用の基本方式とはしない。
+
+## 実行とフィードバック
+
+Runtimeは構築したMuJoCo実行用データを使用してシミュレーションを実行できること。
+
+モーション再生、実マイコンとの中継・同期、センサー出力、sysid等のRuntime機能は、Projectで選択した定義・Resourceを利用できること。
+
+sysid等によってProjectの定義へ反映すべき結果が得られた場合は、Runtime固有の定義としてProjectへ保存できること。
 
 ---
 

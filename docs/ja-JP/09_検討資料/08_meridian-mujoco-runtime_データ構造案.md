@@ -1,5 +1,8 @@
 # meridian-mujoco-runtime データ構造案
 
+> **位置付け更新**  
+> 本資料のdomain分離案は継続して検討対象とするが、Project / Resourceの所有方式はworkflow-ide-framework導入後の方針へ読み替える。Project lifecycle、Project Definition、Resource Registry、filesystem path管理はFrameworkが所有し、RuntimeはApplication固有domain dataを所有する。詳細は「18_meridian-mujoco-runtime_Project定義・格納方式方針」を正とする。
+
 ## 目的
 
 `meridian-mujoco-runtime` は、MuJoCo を中核としたシミュレーション実行環境として、以下を組み合わせて動作させる。
@@ -35,7 +38,7 @@ sysidを行う
 
 ```text
 meridian-mujoco-runtime
-  ├─ RuntimeProject
+  ├─ RuntimeProjectData
   ├─ RobotDefinition
   ├─ ActuatorDefinition
   ├─ FieldDefinition
@@ -79,18 +82,18 @@ sysid対象をアクチュエーター単位で扱える
 
 ---
 
-# 3. RuntimeProject
+# 3. RuntimeProjectData
 
 ## 3.1 役割
 
-シミュレーション全体のプロジェクト単位。
+workflow-ide-frameworkが所有するProjectの `application/` 領域に保存するRuntime固有domain dataのroot。
+
+Project ID、Project名、Project lifecycle、Resource filesystem path等を重複して所有しない。
 
 ```json
 {
-  "runtime_project": {
-    "id": "project_stair_test_001",
-    "name": "Stair Climbing Test",
-    "version": "0.1.0",
+  "runtime_project_data": {
+    "resource_metadata": {},
     "robots": [],
     "actuators": [],
     "fields": [],
@@ -100,6 +103,8 @@ sysid対象をアクチュエーター単位で扱える
   }
 }
 ```
+
+Project所属fileはFrameworkのResource Registryへ登録し、Runtime側はstable `resource_id` を使ってdomain objectとResourceを関連付ける。
 
 ---
 
@@ -127,7 +132,7 @@ sysid対象をアクチュエーター単位で扱える
     "id": "robot_humanoid_001",
     "name": "Humanoid Test Robot",
     "model_format": "mjcf",
-    "model_uri": "robots/humanoid/model.xml",
+    "model_resource_id": "res-humanoid-model",
     "root_body": "base_link",
     "joints": [
       {
@@ -333,7 +338,7 @@ sysid結果を反映したアクチュエーター挙動モデル。
     "id": "field_house_entry_001",
     "name": "House Entry Field",
     "model_format": "mjcf",
-    "model_uri": "fields/house_entry/model.xml",
+    "model_resource_id": "res-house-entry-model",
     "objects": [
       {
         "id": "stairs_001",
@@ -924,46 +929,31 @@ RuntimeSession
 
 ---
 
-# 19. 推奨ファイル構成
+# 19. Project格納との関係
+
+物理Project構造はworkflow-ide-frameworkのProject仕様に従う。
 
 ```text
-meridian-mujoco-runtime/
-  projects/
-    project_stair_test_001.json
-
-  robots/
-    humanoid_001/
-      robot.json
-      model.xml
-
-  actuators/
-    serial_servo/
-      knee_servo_001.json
-
-  fields/
-    house_entry_001/
-      field.json
-      model.xml
-
-  scenarios/
-    open_door_001.json
-
-  profiles/
-    accuracy.json
-    realtime.json
-    hil_sync.json
-
-  sessions/
-    session_20260510_001/
-      session.json
-      logs/
+<Project Root>/
+├─ project.toml
+├─ framework/
+├─ resources/
+└─ application/
 ```
+
+Robot / Field等のProject Resource fileはFramework Resource Registryで管理する。Runtime domain dataは `application/` 以下に保存する。
+
+本資料では `robots/`、`fields/` 等のdomain分類を物理directoryとして必須化しない。既存URDF / MJCFの相対参照関係を維持できるよう、Resourceの論理分類と物理配置を分離する。
+
+実行中だけ存在するRuntimeSessionはProject Definition / RuntimeProjectDataとは分離する。保存対象としたsession結果やlogの具体的格納方式は別途仕様化する。
 
 ---
 
 # 20. まとめ
 
-`meridian-mujoco-runtime` のデータ構造は、以下を基本単位にするとよい。
+Project / Resource基盤はworkflow-ide-frameworkを使用し、`meridian-mujoco-runtime` はApplication固有domain dataに集中する。
+
+Runtime domainのデータ構造は、以下を基本単位にするとよい。
 
 ```text
 RobotDefinition
@@ -973,6 +963,8 @@ ScenarioDefinition
 ExecutionProfile
 RuntimeSession
 ```
+
+Resource fileへの参照はfilesystem pathではなくFrameworkのstable `resource_id` を基本とする。
 
 特に重要なのは、
 

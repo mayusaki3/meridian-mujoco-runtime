@@ -408,7 +408,81 @@ RobotDefinition: robot-main
 
 `data_version` はRuntime製品versionではなく、Runtime所有Application dataの形式versionである。Frameworkは値を保存・受け渡しするが意味を解釈しない。
 
-## 11. Step 5との関係
+## 11. Runtime Application data の永続化方針
+
+Runtime所有dataは `application/` 以下へ保存する。初期段階では、domain objectごとに多数のfileへ分割せず、Project全体のRuntime固有定義を一つのmanifestへまとめる方式を第一候補とする。
+
+```text
+application/
+└─ runtime_project.json
+```
+
+`runtime_project.json` はFrameworkのProject Definitionではなく、Runtimeが所有する `RuntimeProjectData` のserializationとする。Frameworkは内容を解釈しない。
+
+JSONを初期候補とする理由は、Runtime domain dataがRobot / Actuator / Field / Scenario等の構造化dataを中心とし、開発中のschema確認、diff、test fixture作成を容易にするためである。将来、容量・性能・部分更新等の要件から形式やfile分割を変更する場合は `application.data_version` のmigration対象としてRuntimeが処理する。
+
+初期構造の概念例:
+
+```json
+{
+  "resource_metadata": {
+    "res-main-robot": {
+      "role": "robot",
+      "format": "meridian",
+      "logical_object_id": "robot-main",
+      "representation": "canonical"
+    }
+  },
+  "logical_objects": {
+    "robots": [],
+    "actuators": [],
+    "fields": [],
+    "scenarios": [],
+    "execution_profiles": []
+  },
+  "relationships": []
+}
+```
+
+### versionの扱い
+
+`runtime_project.json` 内にFramework用versionやRuntime製品versionを重複保存しない。
+
+Runtime Application dataの形式versionはFrameworkの `project.toml` にある `application.data_version` をRuntimeが所有・解釈する。Runtimeは実dataも検査し、stored `data_version` だけを根拠に互換性を決定しない。
+
+### Resource参照
+
+Runtime Application dataからProject Resourceを参照する場合はstable `resource_id` を使用し、`resources/` からのfilesystem pathをRuntime側へ重複保存しない。
+
+Resourceのpath、Scope、Missing等はFramework Resource Registryを正本とする。
+
+### 保存対象としないもの
+
+実行中だけ存在するRuntimeSessionの動的状態、cache、一時build生成物は `runtime_project.json` の永続domain definitionへ含めない。
+
+simulation / sysid結果等を利用者がProjectへ保存する場合、その実dataはProject Resourceとして登録し、Runtime Application dataには必要なlogical relation / metadataのみを保持する。
+
+### Save / Open
+
+Save / Save As / OpenはFrameworkのApplication Project Adapter境界を使用する。
+
+RuntimeはApplication dataのserialization、compatibility、migration、consistency検査を担当する。Frameworkは `application/` 内部をblind copyまたは解釈しない。
+
+`runtime_project.json` のatomic write方法、temporary file命名、障害回復の詳細は実装仕様で決定する。Project全体のsave順序はFrameworkのProject Save契約に従う。
+
+### 未決事項
+
+次は実装前に別途確定する。
+
+- `runtime_project.json` というfile名の正式採用
+- JSON schemaの正式なfield名・必須/optional
+- logical object IDの生成規則
+- relationship表現の具体schema
+- Project作者のversion / authors / license metadataの所有先
+- Meridian canonical内部表現そのものをApplication dataへ埋め込むか、Project Resourceとして分離するか
+- 保存対象result / datasetのmetadata schema
+
+## 12. Step 5との関係
 
 workflow-ide-framework Step 5では、このProject構造の全機能を実装しない。
 
@@ -422,7 +496,7 @@ Step 5 Consumer実装で必要になる範囲として、少なくとも次を�
 
 File Explorer、完全なImport / Export UI、Resource Inspector等はFramework側APIの進捗に応じて後続Stepで扱う。
 
-## 12. 今回確定する基本原則
+## 13. 今回確定する基本原則
 
 1. Meridian Projectは作業・実行の単位とする。
 2. Projectは原則自己完結とする。
@@ -464,3 +538,6 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 38. 既存要件の独自zip派生packageは初期Export / Import方式として採用せず、URDF / MJCFと必要な関連fileを対象とする。
 39. Project rootの物理構造はFramework仕様の `project.toml / framework / resources / application` を使用し、Runtime独自の `assets / data / results / .meridian` rootを要求しない。
 40. Project固有入力dataや保存対象resultも、Project所属fileである場合はFramework Resource Registryへ登録し、用途上の意味はRuntime側で管理する。
+41. Runtime Application dataは `application/` 以下へ保存し、初期永続化は単一JSON manifestを第一候補とする。
+42. Application data形式の互換性versionは `application.data_version` のみを使用し、Runtime製品versionやFramework versionを重複してdata format判定へ使用しない。
+43. Runtime Application dataからProject Resourceを参照するときはstable `resource_id` を使用し、filesystem pathを重複保存しない。

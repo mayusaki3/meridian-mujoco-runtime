@@ -39,122 +39,92 @@ Project は保存可能な定義・入力・結果を扱う。
 
 ## 3. 基本格納構造
 
-初期案は次の構造とする。
+Projectの物理root構造はworkflow-ide-frameworkのProject仕様をそのまま使用する。Runtime独自のProject root構造は定義しない。
 
 ```text
-<project>/
+<Project Root>/
 ├─ project.toml
+├─ framework/
+│  └─ framework_settings.toml
 ├─ resources/
-│  ├─ robots/
-│  ├─ actuators/
-│  ├─ fields/
-│  ├─ scenarios/
-│  └─ profiles/
-├─ assets/
-├─ data/
-├─ results/
-└─ .meridian/
+└─ application/
 ```
+
+保存済みProjectでは `project.toml` を必須とし、その他のdirectoryは必要時に作成する。
 
 ### project.toml
 
-Visual Studio の Project file に相当するProject Definitionとして、workflow-ide-frameworkの `project.toml` を使用する。Runtime独自の `meridian.toml` は設けない。
+Visual StudioのProject fileに相当するProject Definitionとして、workflow-ide-frameworkの `project.toml` を使用する。Runtime独自の `meridian.toml` は設けない。
 
-Project DefinitionのFramework共通metadata、Application識別、Project lifecycle、Resource RegistryはFrameworkの公開契約を使用する。
+Frameworkは `project.toml`、`framework/`、Project lifecycleを所有する。RuntimeはFrameworkの公開Project契約を利用し、Framework所有dataの内部表現を重複管理しない。
 
-Runtime固有のRobot、Actuator、Field、Scenario等のdomain dataはApplication所有領域へ保存し、Frameworkはその内容を解釈しない。
-
-Project directory内にファイルが存在するだけではProject所属とはみなさず、FrameworkのResource Registryへ登録されたResourceをProject所属として扱う。
-
-Project Definitionに個々のRobotやField等の詳細情報をすべて集約することは目的としない。
+Project directory内にfileが存在するだけではProject所属とはみなさず、FrameworkのResource Registryへ登録されたResourceをProject所属として扱う。
 
 ### Application と Project Format
-
-`workflow-ide-framework`はMeridian Applicationへ一体化される内部Frameworkとして扱うため、Project DefinitionへFramework IDやFramework versionを記録しない。
 
 Projectの永続化形式は、Framework所有領域とApplication所有領域で独立してversion管理する。
 
 - `project.format_version`: Frameworkが所有・解釈するProject形式version
 - `application.data_version`: Meridian Applicationが所有・解釈するApplication data形式version
 
-Runtimeは、Projectを作成・保存したworkflow-ide-framework自体のversionを意識せず、Framework所有領域の互換性判断・migrationはFrameworkへ委ねる。これによりRuntimeが利用するFramework versionが更新されても、Runtime側へFramework Project形式の互換性処理を持ち込まない。
+RuntimeはFramework versionをProject互換性判定へ使用せず、Framework所有領域の互換性判断・migrationをFrameworkへ委ねる。
 
-逆にFrameworkは`application.data_version`の意味を解釈しない。保存値をApplicationへ渡し、Applicationが実データを確認した上で互換性・変換可否・整合性を判断する。Application dataのmigrationはApplication側が所有する。
+Frameworkは `application.data_version` の意味を解釈しない。保存値をRuntimeへ渡し、Runtimeが実dataを確認した上で互換性・変換可否・整合性を判断する。Application dataのmigrationはRuntimeが所有する。
 
-Framework versionとApplication製品versionは、これらの永続化形式versionとは分離する。各所有者は、自身が担当する永続化形式について1つのversionを管理する。
+Framework versionとRuntime製品versionは永続化形式versionとは分離する。各所有者は、自身が担当する永続化形式について1つのversionを管理する。
 
-Project作者が管理するProject自身のversionは、Project形式やApplication data形式のversionとは別のProject metadataとして扱う。
+Project作者が管理するProject自身のversion、author、license等を保持する必要性はあるが、現行Framework v0.1.0の `project.toml` 公開schemaにはこれらが含まれていない。格納先はFramework側との責務境界を確認して後続で決定し、現時点では独自fieldを追加しない。
 
-概念例:
+現行Framework schemaでRuntimeが使用する部分の概念例:
 
 ```toml
 [project]
 format_version = 1
-id = "khr3hv-walking-test"
 name = "KHR-3HV Walking Test"
-version = "0.1.0"
 description = "KHR-3HV walking simulation project"
-authors = ["..."]
-license = "..."
+language = "ja-JP"
+save_id = "..."
+saved_at = "..."
 
 [application]
 id = "meridian-mujoco-runtime"
+name = "Meridian MuJoCo Runtime"
+description = "..."
+language = "ja-JP"
 data_version = "1"
 ```
 
-具体的なschema、正式なApplication ID、Project Definitionのファイル名・拡張子はworkflow-ide-frameworkの確定仕様との整合を確認しながら後続仕様で決定する。
+正式なApplication IDは後続仕様で決定する。
 
-### resources
+### framework/
 
-Projectを構成する意味のある定義を扱う。
+Framework所有のProject stateを保存する領域とする。現行仕様では `framework/framework_settings.toml` を使用する。
 
-Robot、Actuator、Field、Scenario、Execution Profile、URDF、MJCF等を想定する。
+Dock Layout等のFramework共通stateはFrameworkの責務であり、Runtime独自の `.meridian/` directoryは設けない。
 
-Resourceの論理分類と物理ディレクトリ構造は分離する。Resourceを特定の `resources/<分類>/` 配下へ置くことをProject Format上の必須条件にはしない。
+### resources/
 
-Meridian内部定義は、URDF / MJCFより多くの情報を保持できる正本として扱う方向とする。
+Project Scope Resourceの物理rootはFramework仕様に従い `<Project Root>/resources/` とする。
 
-URDF / MJCFは主としてデータ交換、およびMuJoCo等の外部系へ渡す表現形式として位置付ける。ただし利用者から見ればProjectを構成するデータであるため、Meridian内部定義とURDF / MJCFをProject内で併存させてよい。
+Robot、Actuator、Field、Scenario、Execution Profile、Meridian内部定義、URDF、MJCF、mesh、texture、Project固有入力data、保存対象result等、Projectに所属させるfileは用途に応じてここへ配置し、Resource Registryへ登録する。
 
-Project Resourceはworkflow-ide-frameworkのResource Registryへ登録されたものをProject所属として扱う。
+Resourceの論理分類と物理directory構造は分離する。`resources/robots/`、`resources/assets/`、`resources/results/` 等の固定分類directoryをProject Format上の必須条件にはしない。
 
-Framework共通のRegistry entryはstable `resource_id` と `ResourceReference` を持ち、Project ScopeではFrameworkが管理するProject Resource Rootからの相対pathを使用する。
+Meridian内部定義はURDF / MJCFより多くの情報を保持できるcanonical表現とし、URDF / MJCFは主として交換・外部利用向け表現として扱う方向とする。同一logical objectについて複数表現をProject内で併存させてよい。
 
-Robot / Field等の「論理的な役割」、Meridian内部形式 / URDF / MJCF等の「表現形式」、同一論理対象間の関係はRuntime固有metadataとしてApplication側が所有する。FrameworkのResourceEntryへMuJoCo固有schemaを追加することを前提としない。
+mesh、texture等のAssetもFramework上ではResourceである。Assetであること、mesh / texture等の意味、生成物であることはRuntime固有metadataとして管理する。
 
-### assets
+URDF / MJCF等から参照される関連Assetも、Projectを成立させるdataとしてResource Registryへの登録対象とする。
 
-mesh、texture等、Resourceから参照される補助ファイルを扱う。
+Project固有の入力・計測dataやsimulation / sysid結果を保存対象とする場合も、独立したroot `data/` や `results/` をProject Formatとして要求せず、Project Resourceとして扱う。具体的なlogical roleと保存policyはRuntime側で定義する。
 
-Assetの論理分類と物理ディレクトリ構造は分離する。既存URDF / MJCF等の相対参照関係を維持できるよう、Assetを特定の `assets/` 配下へ移動することをProject Format上の必須条件にはしない。
+### application/
 
-AssetもFramework上ではProject ResourceとしてResource Registryへ登録し、Assetであることやmesh / texture等の意味はRuntime側で管理する。
+Runtime固有のProject dataを保存するApplication所有領域とする。Frameworkはこのdirectory内部を解釈しない。
 
-URDF / MJCF等から参照されるmeshやtextureも、Projectを成立させるデータとしてResource Registryへの登録対象とする。
+RobotDefinition、ActuatorDefinition、FieldDefinition、ScenarioDefinition等のlogical object、Runtime固有Resource metadata、logical objectと `resource_id` の関係等を保存する。
 
-Import時などに交換形式から参照されるAssetを検出した場合、利用者が一つずつ登録することを必須とせず、ApplicationがProjectへの取り込みと登録を自動化できる構造とする。
-
-必要なAssetが存在しない場合は、エラーとして扱うだけでなく、用途に応じてダミーmesh等の代替Assetを生成してProjectを成立させる補助機能も検討する。生成した代替Assetを使用する場合もResource Registryへ登録し、Projectから認識可能な状態とする。
-
-### data
-
-Project固有の入力・計測データ等を格納する領域。
-
-### results
-
-simulation、sysid等によって生成され、保存対象とした結果を格納する。
-
-cacheや一時ファイルとは分離する。
-
-### .meridian
-
-Application / IDE の作業状態を格納する領域。
-
-Projectのsimulation上の意味を決定する情報とは分離する。
-
-将来的にはDock Layout、開いているDocument、選択状態等を格納する可能性がある。
-
-具体的な内容とGit管理方針は後続仕様で決定する。
+RuntimeSessionの実行中動的状態はApplication Project dataとは分離する。保存対象となった結果だけをProject Resourceとして扱う。
 
 ## 4. パスの基本方針
 
@@ -472,7 +442,7 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 16. Framework version、Application製品version、永続化形式versionを分離し、各所有者は担当する永続化形式について1つのversionを管理する。
 17. Project Definitionには対象Meridian Applicationを識別するstable Application IDを持たせる。
 18. Project作者が管理するProject自身のversionは、Project形式・Application data形式のversionとは別のmetadataとする。
-19. Project directory内に存在するだけでは所属とせず、Resource / AssetはProject Definitionへ明示的に登録する。
+19. Project directory内に存在するだけでは所属とせず、Project所属fileはFramework Resource Registryへ明示的に登録する。
 20. Resource / Assetの論理分類と物理ディレクトリ構造を分離する。
 21. Solution相当の上位Project集合概念は今回導入しない。
 22. Meridian内部定義を情報量の多い正本とし、URDF / MJCFは主として交換・外部利用向け表現として扱う。
@@ -492,3 +462,5 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 36. 既存の「MuJoCoデータセット」は単一folder/packageをProject基礎単位とせず、所属管理・domain意味・Resource表現・組み合わせ・Runtime buildへ責務を分解する。
 37. `Identification.json` をProject所属やResource identityの正本にはせず、Framework Resource RegistryとRuntimeProjectDataを正本とする。
 38. 既存要件の独自zip派生packageは初期Export / Import方式として採用せず、URDF / MJCFと必要な関連fileを対象とする。
+39. Project rootの物理構造はFramework仕様の `project.toml / framework / resources / application` を使用し、Runtime独自の `assets / data / results / .meridian` rootを要求しない。
+40. Project固有入力dataや保存対象resultも、Project所属fileである場合はFramework Resource Registryへ登録し、用途上の意味はRuntime側で管理する。

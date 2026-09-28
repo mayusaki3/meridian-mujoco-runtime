@@ -67,9 +67,9 @@ Projectの永続化形式は、Framework所有領域とApplication所有領域�
 - `project.format_version`: Frameworkが所有・解釈するProject形式version
 - `application.data_version`: Meridian Applicationが所有・解釈するApplication data形式version
 
-RuntimeはFramework versionをProject互換性判定へ使用せず、Framework所有領域の互換性判断・migrationをFrameworkへ委ねる。
+RuntimeはFramework versionをProject互換性判定へ使用せず、Framework所有領域の互換性判断・migrationをFrameworkへ委ねる。Runtimeは `project.toml`、`framework/`、Resource Registryの永続化fileを直接read/writeせず、Framework Public API / Adapter契約だけを使用する。
 
-Frameworkは `application.data_version` の意味を解釈しない。保存値をRuntimeへ渡し、Runtimeが実dataを確認した上で互換性・変換可否・整合性を判断する。Application dataのmigrationはRuntimeが所有する。
+Frameworkは `application.data_version` の意味を解釈しない。Framework Public API / Adapter契約を通して保存値をRuntimeへ渡し、Runtimeが実dataを確認した上で互換性・変換可否・整合性を判断する。Runtimeが `project.toml` から値を直接取得することはしない。Application dataのmigrationはRuntimeが所有する。
 
 Framework versionとRuntime製品versionは永続化形式versionとは分離する。各所有者は、自身が担当する永続化形式について1つのversionを管理する。
 
@@ -448,13 +448,13 @@ JSONを初期候補とする理由は、Runtime domain dataがRobot / Actuator /
 
 `runtime_project.json` 内にFramework用versionやRuntime製品versionを重複保存しない。
 
-Runtime Application dataの形式versionはFrameworkの `project.toml` にある `application.data_version` をRuntimeが所有・解釈する。Runtimeは実dataも検査し、stored `data_version` だけを根拠に互換性を決定しない。
+Runtime Application dataの形式versionは `application.data_version` とし、その意味と互換性判断はRuntimeが所有する。永続化先はFrameworkが所有し、RuntimeはFramework Public API / Adapterから渡された値として扱う。Runtimeは `project.toml` を直接read/writeしない。Runtimeは実dataも検査し、stored `data_version` だけを根拠に互換性を決定しない。
 
 ### Resource参照
 
 Runtime Application dataからProject Resourceを参照する場合はstable `resource_id` を使用し、`resources/` からのfilesystem pathをRuntime側へ重複保存しない。
 
-Resourceのpath、Scope、Missing等はFramework Resource Registryを正本とする。
+Resourceのpath、Scope、Missing等はFramework Resource Registryを正本とする。RuntimeはRegistryの永続化fileへ直接アクセスせず、Framework Public APIからResource情報を取得・操作する。
 
 ### 保存対象としないもの
 
@@ -541,3 +541,5 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 41. Runtime Application dataは `application/` 以下へ保存し、初期永続化は単一JSON manifestを第一候補とする。
 42. Application data形式の互換性versionは `application.data_version` のみを使用し、Runtime製品versionやFramework versionを重複してdata format判定へ使用しない。
 43. Runtime Application dataからProject Resourceを参照するときはstable `resource_id` を使用し、filesystem pathを重複保存しない。
+44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
+45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

@@ -475,6 +475,20 @@ Framework Resource Registryへ登録されたcanonical Resourceを正規定義�
 
 この分類は「domain typeごとに必ずfileを1つ作る」という意味ではない。どのdomain typeを独立Resourceとするか、およびcanonical内部表現のfile format / schema / extensionは後続仕様で確定する。
 
+### canonical内部表現の初期file形式
+
+canonical内部表現は、URDF / MJCFを正本として拡張するのではなく、Runtime固有の構造化dataとして保持する。Robotのactuator / sensor slot、Actuatorのcapability / sysid / HIL情報、FieldのRuntime固有属性等、URDF / MJCFだけでは保持できない情報を欠落なく表現できることを優先する。
+
+初期file形式はJSONを第一候補とする。理由は、現在のdomain data案が階層化された構造dataを中心としていること、開発中にschema・diff・test fixtureを確認しやすいこと、URDF / MJCF等との変換処理で中間構造を扱いやすいことによる。binary形式は初期canonical形式には採用しない。
+
+ただし、canonical Resource全体を一つの巨大fileへまとめる方式は採らない。独立Resourceと判断されたRobot、Actuator、Field等は、それぞれのcanonical定義を個別Resourceとして保存できる構造とする。
+
+初期段階では独自拡張子を必須化せず、通常の `.json` を使用する方向とする。Meridian独自拡張子は、OS file association、誤編集防止、交換package識別等の具体的要件が生じた場合に別途検討する。拡張子だけを変更したJSONや独自packageを先に定義しない。
+
+canonical JSON内にはFrameworkの `resource_id`、filesystem path、Project ID等のFramework所有identityを正本として埋め込まない。canonical定義自身のdomain identityとdomain内容を保持し、Project内でのResource membershipとlogical objectとの関連付けはFramework Resource RegistryおよびRuntime Application dataが担当する。
+
+canonical JSONのschema versionを別途追加するかは後続仕様で決定する。Application全体のmigration入口は `application.data_version` がRuntime所有versionとして存在するため、domain Resourceごとに独立versionを増やす必要性を先に確認する。versionを追加する場合も、担当責務ごとに一つというversion方針を崩さない。
+
 ### Resource参照
 
 Runtime Application dataからProject Resourceを参照する場合はstable `resource_id` を使用し、`resources/` からのfilesystem pathをRuntime側へ重複保存しない。
@@ -504,7 +518,8 @@ RuntimeはApplication dataのserialization、compatibility、migration、consist
 - logical object IDの生成規則
 - relationship表現の具体schema
 - Project作者のversion / authors / license metadataの所有先
-- Meridian canonical内部表現の具体的なfile format / schema / extension
+- canonical JSONの正式schema、必須/optional field、domain identity規則
+- canonical Resource個別のschema versionが必要かどうか
 - 保存対象result / datasetのmetadata schema
 
 ## 12. Step 5との関係
@@ -568,5 +583,7 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 43. Runtime Application dataからProject Resourceを参照するときはstable `resource_id` を使用し、filesystem pathを重複保存しない。
 43a. 独立identityを持ち、再利用・交換・複数表現管理の対象となるcanonical domain定義はProject Resourceとして分離し、Runtime Application dataへ定義本体を重複保存しない。
 43b. Scenario、Execution Profile、relation等のProject内構成情報は、独立Resourceとして扱う必要が生じるまではRuntime Application dataへ保持できる。
+43c. canonical内部表現の初期file形式は通常のJSONを第一候補とし、独自拡張子・binary形式・独自packageを初期要件としない。
+43d. canonical ResourceにはFramework所有のresource_id、filesystem path、Project IDを正本として重複保存しない。
 44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
 45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

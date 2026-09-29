@@ -67,11 +67,17 @@ Projectの永続化形式は、Framework所有領域とApplication所有領域�
 - `project.format_version`: Frameworkが所有・解釈するProject形式version
 - `application.data_version`: Meridian Applicationが所有・解釈するApplication data形式version
 
-RuntimeはFramework versionをProject互換性判定へ使用せず、Framework所有領域の互換性判断・migrationをFrameworkへ委ねる。Runtimeは `project.toml`、`framework/`、Resource Registryの永続化fileを直接read/writeせず、Framework Public API / Adapter契約だけを使用する。
+Runtimeが組み込むFramework本体のversionと、Project永続化形式のversionは別に扱う。
 
-Frameworkは `application.data_version` の意味を解釈しない。Framework Public API / Adapter契約を通して保存値をRuntimeへ渡し、Runtimeが実dataを確認した上で互換性・変換可否・整合性を判断する。Runtimeが `project.toml` から値を直接取得することはしない。Application dataのmigrationはRuntimeが所有する。
+Applicationが想定するFramework本体versionとの互換性確認はApplication起動時に行う。これはProject互換性判定ではなく、Applicationと組み込みFramework本体の組み合わせを確認するためのものとする。
 
-Framework versionとRuntime製品versionは永続化形式versionとは分離する。各所有者は、自身が担当する永続化形式について1つのversionを管理する。
+Project Open時は、Frameworkが自身の管理する `project.format_version` をProjectごとに確認し、Framework管理dataについて必要なmigrationをFramework自身が担当する。Runtimeはこの判定・migrationへ直接関与しない。
+
+続いてFrameworkは `application.data_version` をFramework Public API / Adapter契約を通してRuntimeへ渡す。RuntimeはRuntime管理dataを確認し、必要な互換性判断・migrationをRuntime自身が担当する。Runtimeが `project.toml` から値を直接取得することはしない。
+
+Runtimeは `project.toml`、`framework/`、Resource Registryの永続化fileを直接read/writeせず、Framework Public API / Adapter契約だけを使用する。
+
+Framework本体version、Runtime製品version、`project.format_version`、`application.data_version` を混同しない。永続化形式についてはFrameworkとRuntimeがそれぞれ自身の担当versionを1つ管理する。
 
 Project作者が管理するProject自身のversion、author、license等を保持する必要性はあるが、現行Framework v0.1.0の `project.toml` 公開schemaにはこれらが含まれていない。格納先はFramework側との責務境界を確認して後続で決定し、現時点では独自fieldを追加しない。
 
@@ -510,8 +516,8 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 10. FrameworkはProjectのMuJoCo固有意味を所有しない。
 11. workflow-ide-frameworkはMeridian Applicationへ一体化される内部Frameworkとして扱い、Project DefinitionへFramework ID / versionを記録しない。
 12. Framework所有Project形式は `project.format_version` で管理し、Frameworkだけが解釈・互換性判断・migrationを担当する。
-13. Runtimeは利用しているFramework versionをProject互換性のために意識しない。
-14. Application所有data形式は `application.data_version` で管理し、Applicationだけが解釈・互換性判断・migrationを担当する。
+13. Applicationが想定するFramework本体versionとの互換性確認はApplication起動時に行い、Project互換性判定とは分離する。RuntimeはProject Open時のFramework本体version判定を行わない。
+14. Project Open時、Frameworkは `project.format_version` を確認してFramework管理dataの互換性判断・migrationを担当し、その後Application所有data形式は `application.data_version` でApplicationだけが解釈・互換性判断・migrationを担当する。
 15. Frameworkは `application.data_version` の意味を解釈せず、Applicationへ渡す。
 16. Framework version、Application製品version、永続化形式versionを分離し、各所有者は担当する永続化形式について1つのversionを管理する。
 17. Project Definitionには対象Meridian Applicationを識別するstable Application IDを持たせる。

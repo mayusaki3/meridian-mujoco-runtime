@@ -456,6 +456,25 @@ JSONを初期候補とする理由は、Runtime domain dataがRobot / Actuator /
 
 Runtime Application dataの形式versionは `application.data_version` とし、その意味と互換性判断はRuntimeが所有する。永続化先はFrameworkが所有し、RuntimeはFramework Public API / Adapterから渡された値として扱う。Runtimeは `project.toml` を直接read/writeしない。Runtimeは実dataも検査し、stored `data_version` だけを根拠に互換性を決定しない。
 
+### canonical内部表現とApplication dataの境界
+
+Robot、Actuator、Field等のうち、独立したidentityを持ち、Project内で複数表現を持ち得るdomain定義のcanonical内部表現は、`runtime_project.json` へ本体を埋め込まず、Project Resourceとして分離する方針とする。
+
+Framework Resource Registryへ登録されたcanonical Resourceを正規定義の実体とし、Runtime Application dataはstable `resource_id` を使ってlogical objectとの関係を保持する。同じlogical objectへMJCF、URDF等のexchange / derived表現を追加しても、logical object identityとcanonical定義を分離したまま管理できる。
+
+この分離により、canonical定義もProject所属ResourceとしてMissing / Locate / Resource Operation等のFramework機構を利用でき、将来の選択的な再利用・Import / Export対象として扱える。canonical Resourceの物理directoryは固定せず、Framework Resource Registryを所属・pathの正本とする。
+
+一方、Project内の組み合わせや実行構成だけに意味を持つ小規模な定義は、必ずしも個別Resourceへ分割しない。Scenario、Execution Profile、logical object間relation等については、独立再利用性、外部交換、file単位操作の必要性が生じるまではRuntime Application dataへ保持できるものとする。
+
+初期分類基準は次の通りとする。
+
+- 独立identityを持ち、単体で再利用・交換・複数表現管理の対象となるdomain定義: canonical Project Resource
+- 現在のProject内で複数Resource / logical objectを組み合わせる構成情報: Runtime Application data
+- simulation / sysid等の保存実data: Project Resource
+- RuntimeSession、cache、temporary build output等の実行時状態: Project永続domain定義には含めない
+
+この分類は「domain typeごとに必ずfileを1つ作る」という意味ではない。どのdomain typeを独立Resourceとするか、およびcanonical内部表現のfile format / schema / extensionは後続仕様で確定する。
+
 ### Resource参照
 
 Runtime Application dataからProject Resourceを参照する場合はstable `resource_id` を使用し、`resources/` からのfilesystem pathをRuntime側へ重複保存しない。
@@ -485,7 +504,7 @@ RuntimeはApplication dataのserialization、compatibility、migration、consist
 - logical object IDの生成規則
 - relationship表現の具体schema
 - Project作者のversion / authors / license metadataの所有先
-- Meridian canonical内部表現そのものをApplication dataへ埋め込むか、Project Resourceとして分離するか
+- Meridian canonical内部表現の具体的なfile format / schema / extension
 - 保存対象result / datasetのmetadata schema
 
 ## 12. Step 5との関係
@@ -547,5 +566,7 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 41. Runtime Application dataは `application/` 以下へ保存し、初期永続化は単一JSON manifestを第一候補とする。
 42. Application data形式の互換性versionは `application.data_version` のみを使用し、Runtime製品versionやFramework versionを重複してdata format判定へ使用しない。
 43. Runtime Application dataからProject Resourceを参照するときはstable `resource_id` を使用し、filesystem pathを重複保存しない。
+43a. 独立identityを持ち、再利用・交換・複数表現管理の対象となるcanonical domain定義はProject Resourceとして分離し、Runtime Application dataへ定義本体を重複保存しない。
+43b. Scenario、Execution Profile、relation等のProject内構成情報は、独立Resourceとして扱う必要が生じるまではRuntime Application dataへ保持できる。
 44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
 45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

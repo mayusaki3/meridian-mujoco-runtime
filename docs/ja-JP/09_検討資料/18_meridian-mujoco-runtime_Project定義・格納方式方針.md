@@ -456,6 +456,103 @@ JSONを初期候補とする理由は、Runtime domain dataがRobot / Actuator /
 
 Runtime Application dataの形式versionは `application.data_version` とし、その意味と互換性判断はRuntimeが所有する。永続化先はFrameworkが所有し、RuntimeはFramework Public API / Adapterから渡された値として扱う。Runtimeは `project.toml` を直接read/writeしない。Runtimeは実dataも検査し、stored `data_version` だけを根拠に互換性を決定しない。
 
+## 10.5 SysID中心のActuator / Drive domainモデル
+
+要件03の最優先目標である「SysIDの再現・改良・流用・結果共有」を成立させるため、Robot内のActuator定義とSysID成果物を一体化しない。
+
+SysIDの入口は次の2系統とする。
+
+```text
+Robot起点
+  Robot -> 構成部品を選択 -> SysID Unitを編集 -> SysID Target
+
+単体起点
+  Motor / Servo等を登録 -> SysID Target
+```
+
+対象決定後のSetup / Measurement / Simulation / Identification / Validation / Result処理は共通化する。
+
+### Actuator Product
+
+市販Motor / Servo等の製品としてのidentityと公称情報を表す。manufacturer、model、category、interface、nominal specification等を保持する候補とする。
+
+ProductはRobotの特定実装位置を表さない。同一Productを複数Robot、複数箇所で使用できる。
+
+### Actuator Instance
+
+特定Robotまたは実験環境内に実装されたActuatorを表す。Productへの関係と、Robot内のslot / joint等との関係を持つ。
+
+同一Productであっても個体差を扱えるよう、InstanceとProductを分離する。製造serial等の個体識別情報を必須にはしない。
+
+### SysID Target / SysID Unit
+
+SysID Targetは同定対象を一般化したlogical conceptとする。初期対象には少なくとも次を含める。
+
+- Motor単体
+- Servo Motor単体
+- Robot内のMotor / Servo
+- Gear、Joint、Link等の機構を含む駆動装置
+
+Robot起点では、Robotの構成部品境界をそのままSysID境界に固定せず、利用者が複数構成部品をSysID Unitとしてまとめられるようにする。
+
+これによりMotor単体、Servo assembly、Servo + reduction mechanism、Jointを含む駆動系等を異なる粒度で同定できる。
+
+### SysID Setup
+
+「どのように同定するか」を再利用可能に定義する。
+
+候補要素は、SysID Unit構成規則、動作pattern / excitation、input / output signal、計測方法、制御方法、既知の実装値、fixed / estimate parameter、初期値・制約、Simulation条件、Identification方法、Validation条件とする。
+
+SysID SetupはResultに埋め込んで使い捨てにせず、OSSで改良・流用できる独立した共有対象とする。
+
+### Measurement Dataset
+
+実対象から取得した入力・出力・観測値等の実測dataを保存する。SetupやResultから分離し、同じDatasetへ別のIdentification方法を適用できるようにする。
+
+### SysID Run
+
+Setupを特定Targetへ適用した一回の実行を表す。
+
+Runは使用したSetup、実Target、実行時条件、Measurement Dataset、Simulation、Identification、Validationおよび生成Resultの関係を記録する。Setupそのものを書き換えて実行履歴を表現しない。
+
+### SysID Result / Identified Model
+
+同定によって得られたparameter、評価値、適用条件等を保持する。
+
+Resultの適用範囲は少なくとも次を区別できるようにする。
+
+```text
+Product-level
+  市販製品等の同一Productへ再利用可能な結果
+
+Instance-level
+  特定個体について得られた結果
+
+Mechanism-level
+  Robot内の特定機構・構成を含めて得られた結果
+```
+
+Product-level Resultは、同一Actuator Productを使用するRobot内Instanceへ適用できることを基本ユースケースとする。ただし電源、制御mode、負荷、温度等の適用条件を保持し、Product identityの一致だけで無条件適用しない。
+
+Mechanism-level ResultからMotor / Servo単体のProduct-level特性を自動的に取り出せるとはみなさない。機構由来の摩擦、backlash、compliance、load inertia等が結果へ含まれるためである。
+
+### Resource化の基本方針
+
+OSS共有・再解析・比較の対象となるSysID成果物はProject Resourceとして扱える構造を基本とする。
+
+```text
+Actuator Product Definition     -> canonical Resource候補
+SysID Setup                     -> Resource
+Measurement Dataset             -> Resource
+SysID Result / Identified Model -> Resource
+
+Actuator Instance               -> Project composition側
+SysID Run                       -> Project内relation / 実行履歴を基本候補
+SysID Unit                      -> Setup / Runから参照される構成
+```
+
+Actuator InstanceやSysID Runまで常に独立file Resourceとするかは後続schema設計で確定する。共有可能な定義・実dataと、Project固有の配置・関係情報を分離することを優先する。
+
 ### canonical内部表現とApplication dataの境界
 
 Robot、Actuator、Field等のうち、独立したidentityを持ち、Project内で複数表現を持ち得るdomain定義のcanonical内部表現は、`runtime_project.json` へ本体を埋め込まず、Project Resourceとして分離する方針とする。
@@ -477,7 +574,7 @@ Framework Resource Registryへ登録されたcanonical Resourceを正規定義�
 
 ### canonical内部表現の初期file形式
 
-canonical内部表現は、URDF / MJCFを正本として拡張するのではなく、Runtime固有の構造化dataとして保持する。Robotのactuator / sensor slot、Actuatorのcapability / sysid / HIL情報、FieldのRuntime固有属性等、URDF / MJCFだけでは保持できない情報を欠落なく表現できることを優先する。
+canonical内部表現は、URDF / MJCFを正本として拡張するのではなく、Runtime固有の構造化dataとして保持する。Robotのactuator / sensor slot、Actuator Productのcapability / nominal specification、FieldのRuntime固有属性等、URDF / MJCFだけでは保持できない情報を欠落なく表現できることを優先する。SysID Setup、Measurement Dataset、SysID ResultはActuator Product定義へ埋め込まず、それぞれ再利用・共有可能な成果物として分離する。
 
 初期file形式はJSONを第一候補とする。理由は、現在のdomain data案が階層化された構造dataを中心としていること、開発中にschema・diff・test fixtureを確認しやすいこと、URDF / MJCF等との変換処理で中間構造を扱いやすいことによる。binary形式は初期canonical形式には採用しない。
 
@@ -585,5 +682,9 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 43b. Scenario、Execution Profile、relation等のProject内構成情報は、独立Resourceとして扱う必要が生じるまではRuntime Application dataへ保持できる。
 43c. canonical内部表現の初期file形式は通常のJSONを第一候補とし、独自拡張子・binary形式・独自packageを初期要件としない。
 43d. canonical ResourceにはFramework所有のresource_id、filesystem path、Project IDを正本として重複保存しない。
+43e. SysIDはRobot起点とMotor / Servo等の単体登録起点の2系統を持ち、対象決定後の処理を共通化する。
+43f. Actuator ProductとRobot内Actuator Instanceを分離し、Product-level SysID Resultを同一ProductのInstanceへ再利用可能にする。
+43g. SysID Setup、Measurement Dataset、SysID Result / Identified Modelは相互に分離し、OSSでの再実験・再解析・改良・流用を可能にする。
+43h. SysID ResultはProduct-level、Instance-level、Mechanism-level等の適用範囲と適用条件を保持し、Product identity一致だけで無条件適用しない。
 44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
 45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

@@ -458,7 +458,7 @@ Runtime Application dataの形式versionは `application.data_version` とし、
 
 ## 10.5 SysID中心のActuator / Drive domainモデル
 
-要件03の最優先目標である「SysIDの再現・改良・流用・結果共有」を成立させるため、Robot内のActuator定義とSysID成果物を一体化しない。
+SysIDは共有形式からではなく、Project内での編集、Real / Sim双方への変換・実行、計測、同定、検証、履歴管理を中心に設計する。SysID固有の共有方式は現段階では定義せず、将来のProject Resource Export / Importで扱う。
 
 SysIDの入口は次の2系統とする。
 
@@ -470,7 +470,7 @@ Robot起点
   Motor / Servo等を登録 -> SysID Target
 ```
 
-対象決定後のSetup / Measurement / Simulation / Identification / Validation / Result処理は共通化する。
+対象決定後の編集・Real実行・Sim実行・Identification・Validationは共通化する。
 
 ### Actuator Product
 
@@ -486,72 +486,74 @@ ProductはRobotの特定実装位置を表さない。同一Productを複数Robo
 
 ### SysID Target / SysID Unit
 
-SysID Targetは同定対象を一般化したlogical conceptとする。初期対象には少なくとも次を含める。
+SysID Targetは同定対象を一般化したlogical conceptとする。初期対象には少なくともMotor単体、Servo Motor単体、Robot内のMotor / Servo、Gear・Joint・Link等の機構を含む駆動装置を含める。
 
-- Motor単体
-- Servo Motor単体
-- Robot内のMotor / Servo
-- Gear、Joint、Link等の機構を含む駆動装置
+Robot起点では、Robotの構成部品境界をそのままSysID境界に固定せず、利用者が複数構成部品をSysID Unitとしてまとめられるようにする。これによりMotor単体、Servo assembly、Servo + reduction mechanism、Jointを含む駆動系等を異なる粒度で同定できる。
 
-Robot起点では、Robotの構成部品境界をそのままSysID境界に固定せず、利用者が複数構成部品をSysID Unitとしてまとめられるようにする。
+### SysID Definition
 
-これによりMotor単体、Servo assembly、Servo + reduction mechanism、Jointを含む駆動系等を異なる粒度で同定できる。
+SysID DefinitionをSysIDの主たる編集状態とする。
 
-### SysID Setup
+候補要素は、Target / SysID Unit、動作pattern / excitation、input / output signal、Real実行設定、Sim実行設定、計測設定、既知の実装値、fixed / estimate parameter、初期値・制約、Identification設定、Validation設定、および現在採用している同定値とする。
 
-「どのように同定するか」を再利用可能に定義する。
-
-候補要素は、SysID Unit構成規則、動作pattern / excitation、input / output signal、計測方法、制御方法、既知の実装値、fixed / estimate parameter、初期値・制約、Simulation条件、Identification方法、Validation条件とする。
-
-SysID SetupはResultに埋め込んで使い捨てにせず、OSSで改良・流用できる独立した共有対象とする。
+DefinitionからReal側とSim側の実行表現へ変換する。Real用定義とSim用定義を独立して手編集することを基本形としない。
 
 ### Measurement Dataset
 
-実対象から取得した入力・出力・観測値等の実測dataを保存する。SetupやResultから分離し、同じDatasetへ別のIdentification方法を適用できるようにする。
+実対象から取得した入力・出力・観測値等の計測結果はSysID Definitionへ埋め込まず、別file / Project Resourceとして保存する。
 
-### SysID Run
+同じMeasurement Datasetに対して計算modelやIdentification設定を変更して再同定できるようにする。Datasetは取得時のSysID Definition、対象、実行条件を追跡できる関係を保持する。
 
-Setupを特定Targetへ適用した一回の実行を表す。
+### Calculation Model
 
-Runは使用したSetup、実Target、実行時条件、Measurement Dataset、Simulation、Identification、Validationおよび生成Resultの関係を記録する。Setupそのものを書き換えて実行履歴を表現しない。
+Identificationで使用する計算modelを、Measurement Datasetや同定結果とは分離して識別できるようにする。
 
-### SysID Result / Identified Model
+同一Datasetに複数Calculation Modelを適用した比較、または同一Calculation Modelを複数Datasetへ適用した比較を可能にする。Calculation Modelの具体的な表現形式とResource粒度は後続設計で確定する。
 
-同定によって得られたparameter、評価値、適用条件等を保持する。
+### SysID History / Result
 
-Resultの適用範囲は少なくとも次を区別できるようにする。
+同定結果は現在値だけを上書きして失わず、履歴として保持する。
+
+各履歴entryは少なくとも、使用したMeasurement Dataset、Calculation Model、Identification設定、初期parameter、同定parameter、Simulation結果、Validation結果、および実行時条件を追跡できるようにする。
 
 ```text
-Product-level
-  市販製品等の同一Productへ再利用可能な結果
+SysID Definition
+  └─ current result -> History entry
 
-Instance-level
-  特定個体について得られた結果
-
-Mechanism-level
-  Robot内の特定機構・構成を含めて得られた結果
+SysID History
+  ├─ History A
+  │   ├─ Measurement Dataset A
+  │   ├─ Calculation Model A
+  │   └─ Identified / Validation Result
+  └─ History B
+      ├─ Measurement Dataset A
+      ├─ Calculation Model B
+      └─ Identified / Validation Result
 ```
 
-Product-level Resultは、同一Actuator Productを使用するRobot内Instanceへ適用できることを基本ユースケースとする。ただし電源、制御mode、負荷、温度等の適用条件を保持し、Product identityの一致だけで無条件適用しない。
+現在採用している同定値は、履歴を破壊して更新するのではなく、採用した履歴entryとの関係を保持する。これにより別modelで再同定した後でも以前の結果へ戻せるようにする。
+
+Resultの適用範囲はProduct-level、Instance-level、Mechanism-level等を区別できるようにする。Product-level Resultは同一Actuator Productを使用するRobot内Instanceへ適用できることを基本ユースケースとするが、電源、制御mode、負荷、温度等の条件差を無視して無条件適用しない。
 
 Mechanism-level ResultからMotor / Servo単体のProduct-level特性を自動的に取り出せるとはみなさない。機構由来の摩擦、backlash、compliance、load inertia等が結果へ含まれるためである。
 
 ### Resource化の基本方針
 
-OSS共有・再解析・比較の対象となるSysID成果物はProject Resourceとして扱える構造を基本とする。
-
 ```text
-Actuator Product Definition     -> canonical Resource候補
-SysID Setup                     -> Resource
-Measurement Dataset             -> Resource
-SysID Result / Identified Model -> Resource
+Actuator Product Definition -> canonical Resource候補
+SysID Definition            -> Resource候補
+Measurement Dataset         -> Project Resource
+Calculation Model           -> Resource候補
+Simulation / Validation data-> Project Resource候補
 
-Actuator Instance               -> Project composition側
-SysID Run                       -> Project内relation / 実行履歴を基本候補
-SysID Unit                      -> Setup / Runから参照される構成
+Actuator Instance           -> Project composition側
+SysID History relation      -> Runtime Application data候補
+SysID Unit                  -> SysID Definitionから参照される構成
 ```
 
-Actuator InstanceやSysID Runまで常に独立file Resourceとするかは後続schema設計で確定する。共有可能な定義・実dataと、Project固有の配置・関係情報を分離することを優先する。
+SysID Definition、Calculation Model、Historyをどのfile粒度で保存するかは後続schema設計で確定する。現段階では、計測実dataをDefinitionから分離し、同定履歴から使用DatasetとCalculation Modelを確実に追跡できることを優先する。
+
+SysID固有のExport / Import packageや共有単位はここでは定義しない。必要な関連Resourceをまとめる方法は、Project ResourceのExport / Import設計で後続検討する。
 
 ### canonical内部表現とApplication dataの境界
 
@@ -682,9 +684,12 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 43b. Scenario、Execution Profile、relation等のProject内構成情報は、独立Resourceとして扱う必要が生じるまではRuntime Application dataへ保持できる。
 43c. canonical内部表現の初期file形式は通常のJSONを第一候補とし、独自拡張子・binary形式・独自packageを初期要件としない。
 43d. canonical ResourceにはFramework所有のresource_id、filesystem path、Project IDを正本として重複保存しない。
-43e. SysIDはRobot起点とMotor / Servo等の単体登録起点の2系統を持ち、対象決定後の処理を共通化する。
+43e. SysIDはRobot起点とMotor / Servo等の単体登録起点の2系統を持ち、対象決定後の編集・Real / Sim実行・Identification・Validationを共通化する。
 43f. Actuator ProductとRobot内Actuator Instanceを分離し、Product-level SysID Resultを同一ProductのInstanceへ再利用可能にする。
-43g. SysID Setup、Measurement Dataset、SysID Result / Identified Modelは相互に分離し、OSSでの再実験・再解析・改良・流用を可能にする。
-43h. SysID ResultはProduct-level、Instance-level、Mechanism-level等の適用範囲と適用条件を保持し、Product identity一致だけで無条件適用しない。
+43g. SysID Definitionを主たる編集状態とし、Real / Sim双方の実行表現はDefinitionから変換する。
+43h. Measurement DatasetはDefinitionとは別file / Project Resourceとして保存する。
+43i. SysID結果は履歴として保持し、各履歴から使用Measurement Dataset、Calculation Model、Identification設定、Simulation / Validation結果を追跡可能にする。
+43j. SysID ResultはProduct-level、Instance-level、Mechanism-level等の適用範囲と適用条件を保持し、Product identity一致だけで無条件適用しない。
+43k. SysID固有の共有packageは現段階では定義せず、将来のProject Resource Export / Importで扱う。
 44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
 45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

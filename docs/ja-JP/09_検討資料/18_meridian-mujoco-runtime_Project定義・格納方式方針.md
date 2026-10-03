@@ -498,6 +498,10 @@ SysID DefinitionをSysIDの主たる編集状態とする。
 
 DefinitionからReal側とSim側の実行表現へ変換する。Real用定義とSim用定義を独立して手編集することを基本形としない。
 
+SysID Definition / SysID Unitは複数のInputと複数のOutputを保持できる構造とし、SISOだけを前提にしない。共通Runtimeは複数commandのReal / Sim双方への供給、複数measurementの収集、時系列対応、比較、履歴との関連付けを扱える境界を提供する。
+
+一方、具体的なSISO / SIMO / MIMO同定algorithm、excitation pattern、評価関数、parameter推定方法、専用UIはSysID Panel / Calculation Model側の責務とする。共通基盤へ特定MIMO algorithmを固定しない。
+
 ### Measurement Dataset
 
 実対象から取得した入力・出力・観測値等の計測結果はSysID Definitionへ埋め込まず、別file / Project Resourceとして保存する。
@@ -691,5 +695,7 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 43i. SysID結果は履歴として保持し、各履歴から使用Measurement Dataset、Calculation Model、Identification設定、Simulation / Validation結果を追跡可能にする。
 43j. SysID ResultはProduct-level、Instance-level、Mechanism-level等の適用範囲と適用条件を保持し、Product identity一致だけで無条件適用しない。
 43k. SysID固有の共有packageは現段階では定義せず、将来のProject Resource Export / Importで扱う。
+43l. SysID共通基盤はSysID Unitごとに複数Input / Outputを扱える実行・計測・比較・履歴の枠組みを提供し、SISOだけを前提にしない。
+43m. 具体的なSISO / SIMO / MIMO同定algorithm、excitation、評価・parameter推定、専用UIはSysID Panel / Calculation Model側で定義可能とし、共通基盤へ特定MIMO algorithmを固定しない。
 44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
 45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

@@ -625,6 +625,79 @@ RuntimeはApplication dataのserialization、compatibility、migration、consist
 - canonical Resource個別のschema versionが必要かどうか
 - 保存対象result / datasetのmetadata schema
 
+## 11.1 内部library / domainの命名と責務分離
+
+MeridianはProject / Application / 規格を表す名称として使用し、内部domain modelや汎用libraryの名称には原則として対象・責務を表す一般名を使用する。内部構造をMeridian固有名称へ不必要に結合しない。
+
+初期の責務分離候補は次の通りとする。crate名は責務を示す仮称であり、Rust workspace実装時に正式決定する。
+
+```text
+robot-model
+  RobotDefinition
+  Link / Joint / Component
+  ActuatorDefinition / SensorDefinition
+  Connection
+
+robot-model-import
+  URDF -> RobotDefinition
+  MJCF -> Robot / Actuator等の内部Definition
+
+system-identification
+  SysID Definition / Target / Unit
+  Input / Output
+  Measurement Dataset
+  Calculation Model interface
+  Identification / Validation
+  History / Result
+
+mujoco-adapter
+  Robot / SysID等のcanonical内部Definition
+    -> MuJoCo実行表現
+
+runtime
+  Real execution
+  Simulation execution
+  orchestration
+```
+
+`robot-model` はURDF / MJCF / MuJoCo / Meridianのいずれかをそのままdomain modelとせず、Robot構造・構成部品・接続を表現する中立なmodelとする。URDF / MJCFはImport元およびExport先となる外部表現であり、Import後は内部Definitionを編集上の正本とする。
+
+この境界は将来Open MeriForma等のRobotを扱う場合にも維持する。Open MeriForma固有のController、Forma Unit、通信経路、Actuator、Sensor等を表現・関連付ける必要が生じても、URDF構造そのものを拡張して対応することを前提としない。必要な一般domain概念を `robot-model` 側へ追加し、特定Robot / 規格からの変換はImporter / Adapter側で扱う。
+
+SysIDもUIから分離する。`system-identification` はSysID Definition、Measurement、Calculation Modelとの境界、Identification / Validation、Result / History等を扱うUI非依存libraryとし、workflow-ide-frameworkのWorkspace / Panel型へ依存させない。SysID PanelはApplication側からこのlibraryのPublic APIを利用する。
+
+同様にMuJoCoへの展開は `mujoco-adapter` の責務とし、canonical内部Definitionや同定済みparameterをMuJoCo実行表現へ変換する。SysID Result自体をMJCFそのものとして正本管理しない。
+
+依存方向は、基礎domainがApplication / UI / Frameworkへ依存しない方向を基本とする。
+
+```text
+external formats / Robot-specific definitions
+             |
+             v
+      importer / adapter
+             |
+             v
+         robot-model
+             ^
+             |
+   system-identification
+             |
+             v
+       mujoco-adapter
+             |
+             v
+           runtime
+             ^
+             |
+    Meridian Application
+             ^
+             |
+   workflow-ide-framework
+   (Application integration)
+```
+
+具体的なcrate分割、Rust trait境界、Python Calculation Modelとの接続方式、serialization schemaは実装仕様で確定する。JSON形式をRust structの単純なserialization結果として先に固定せず、domain modelと責務境界を確定してから永続化schemaを定義する。
+
 ## 12. Step 5との関係
 
 workflow-ide-framework Step 5では、このProject構造の全機能を実装しない。
@@ -697,5 +770,9 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 43k. SysID固有の共有packageは現段階では定義せず、将来のProject Resource Export / Importで扱う。
 43l. SysID共通基盤はSysID Unitごとに複数Input / Outputを扱える実行・計測・比較・履歴の枠組みを提供し、SISOだけを前提にしない。
 43m. 具体的なSISO / SIMO / MIMO同定algorithm、excitation、評価・parameter推定、専用UIはSysID Panel / Calculation Model側で定義可能とし、共通基盤へ特定MIMO algorithmを固定しない。
+43n. Meridian名称はProject / Application / 規格レベルで使用し、内部domain model / libraryは対象・責務を表す汎用名称を基本とする。
+43o. Robotのcanonical内部modelはURDF / MJCF / MuJoCo / Meridian固有構造をそのままdomain modelとせず、将来Open MeriForma等を扱える中立なRobot domainとして設計する。
+43p. SysID domain libraryはworkflow-ide-frameworkのWorkspace / Panel等へ依存させず、Application側UIからPublic APIを利用する。
+43q. MuJoCoへの展開はadapter境界で行い、canonical内部Definitionおよび同定済みparameterからMuJoCo実行表現を生成する。
 44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
 45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

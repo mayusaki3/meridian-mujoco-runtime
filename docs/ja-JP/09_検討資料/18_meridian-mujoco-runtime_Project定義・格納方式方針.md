@@ -812,6 +812,28 @@ meridian-flow-adapter (仮称)
 
 `device-io` と `meridian-flow-adapter` は責務候補であり、crateとして分離するかは実装仕様で確定する。
 
+## 11.3 robot-model Rust APIの初期設計候補
+
+実装開始前のdomain API候補を整理する。serialization形式やURDF field名をAPIへ固定せず、Robotを構成・参照・検査する最小概念を定義する。
+
+domain object間は表示名やfile pathではなく、RobotId、LinkId、JointId、ComponentId、ConnectionId等のdomain IDで参照する。これらはFramework resource_idとは別責務とする。
+
+RobotDefinitionはRobot全体のcanonical aggregate root候補とし、metadata、links、joints、components、connectionsを保持する。Public APIはadd / update / remove、domain IDによるlookup、structure validation、topology / component relation列挙を中心とする。collectionの具体型は必要以上にPublic APIへ露出させない。
+
+Linkは剛体構造とinertial / visual / collision情報、Jointはparent / child Link、joint type、transform / axis、limit、dynamicsを担当する。mesh等のfile pathをdomain modelの正本とせず、中立なAsset参照境界を設け、Framework Resource Registryとの対応はApplication / Project integration側で行う。
+
+ComponentはRobotへ取り付けられる機能要素として共通identityを持たせる。初期はActuator / Sensorを中心とし、Controller / Board / Communication等はOpen MeriForma等の具体use caseを確認して一般化する。将来拡張だけを理由に未使用fieldを大量追加しない。Actuator Product等の独立定義とRobot内Component Instanceは区別し、Product本体をRobotDefinitionへ複製しない。
+
+Mechanical topologyはLink / Jointで表し、それ以外のsignal / control / communication relationをJointへ押し込まない。Connectionは非機械的relationの候補とするが、必要なtypeは具体use caseから追加する。
+
+URDF / MJCF parser固有型はrobot-model Public APIへ露出させず、robot-model-importでcanonical Definitionへ変換する。Importerは変換時のwarning、unsupported、missing、approximation等をdiagnosticとして返せる構造を持つ。
+
+SysIDはdomain IDでStandalone Product、Robot Component Instance、Joint / Link、複数要素からなるMechanismを対象指定する。1 Joint = 1 Actuator = 1 SysID Unitという制約は設けず、一つのSysID Unitが複数Component / Jointおよび複数Input / Outputを参照可能とする。
+
+robot-modelはMuJoCoのmjModelやMJCF elementを保持しない。mujoco-adapterがRobotDefinition、Actuator Definition、採用済みSysID parameter等からMuJoCo実行表現を生成する。
+
+初期Rust実装はtest case文書を先に作成し、URDF fixture -> robot-model-import -> RobotDefinition -> structural validation -> canonical serialization -> deserialize -> domain structure一致確認、という小さいvertical sliceから開始する。SysID、MuJoCo、Meridian flowはこのsliceで基礎境界を確認した後に拡張する。
+
 ## 12. Step 5との関係
 
 workflow-ide-framework Step 5では、このProject構造の全機能を実装しない。

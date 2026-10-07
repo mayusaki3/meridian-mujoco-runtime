@@ -698,6 +698,120 @@ external formats / Robot-specific definitions
 
 具体的なcrate分割、Rust trait境界、Python Calculation Modelとの接続方式、serialization schemaは実装仕様で確定する。JSON形式をRust structの単純なserialization結果として先に固定せず、domain modelと責務境界を確定してから永続化schemaを定義する。
 
+## 11.2 robot-modelの最小責務とMeridian計画内の協調
+
+`robot-model` はRuntime IDEだけの内部都合で設計せず、Meridian計画内の複数toolから利用可能な中立domain libraryとなることを目標とする。
+
+最小domainは、Robotのidentityと構造を表す次の概念から開始する候補とする。
+
+```text
+RobotDefinition
+  identity / metadata
+  links
+  joints
+  components
+  connections
+
+Link
+  parent / child relation
+  transform
+  inertial properties
+  visual / collision references
+
+Joint
+  type
+  parent / child
+  origin / axis
+  limits
+  dynamics
+
+Component
+  actuator
+  sensor
+  controller / board
+  other extensible component
+
+Connection
+  mechanical relation
+  signal / communication relation
+```
+
+この構造はURDF fieldの一対一写像にはしない。URDFから取得できない情報はImport後に追加・編集でき、将来Open MeriForma等でController / Board、通信経路、Actuator / Sensor構成を扱う場合にも一般domain概念として拡張できることを優先する。
+
+### URDF Kitchenとの協調
+
+URDF Kitchenはmesh準備、joint point設定、Robot組み立て、URDF / MJCF生成、および既存URDF / SDF / MJCFのGUI上での調整を行うtoolである。
+
+Runtime側で同等のRobot authoring UIを再実装することを基本方針としない。初期連携はfile境界を基本とする。
+
+```text
+URDF Kitchen
+  authoring / mesh / joint / inertia
+          |
+          | URDF / MJCF
+          v
+robot-model-import
+          |
+          v
+RobotDefinition (canonical in Runtime Project)
+```
+
+URDF Kitchenから受け取ったURDF / MJCFはImport sourceであり、Runtime ProjectへImportした後は `RobotDefinition` を正本として扱う。必要になった場合は、将来より直接的なadapter / API / MCP連携を検討できるが、初期の `robot-model` をURDF Kitchen固有data形式へ依存させない。
+
+URDF KitchenはGPLv3で公開されているため、初期実装ではsource codeをコピー・派生実装せず、公開されたURDF / MJCF file interfaceと仕様を通した独立実装を基本とする。将来codeを直接利用・組み込む場合は、その時点のlicenseと配布形態を改めて確認する。
+
+### Meridian Consoleとの協調
+
+Meridian ConsoleはMeridian flow systemのPC側toolとして、Robot実機とのcommand送信、actual state / sensor受信、monitoring、trim設定等を扱う。
+
+SysIDに必要なReal側I/Oと役割が重なるため、`system-identification` がConsole UIやPython実装へ直接依存するのではなく、Real execution / device I/O境界を設ける。
+
+```text
+system-identification
+  SysID Definition
+  Input / Output signal definition
+          |
+          v
+Real execution / device I/O interface
+          |
+          +--> Meridian flow adapter
+          |       -> Meridian compatible device
+          |
+          +--> other control / measurement driver
+```
+
+これにより、Meridian Consoleは既存の独立toolとして利用でき、Runtime側は必要に応じてMeridian flow protocol / device I/Oをadapterとして利用できる。SysID DatasetにはConsole画面状態ではなく、一般化したcommand / measurement signalとして記録する。
+
+Meridian Console repositoryには現時点でrepository-level licenseが明示されていないため、codeのコピー・組み込みを前提にしない。protocol / interfaceの利用可否とlicenseは直接統合を設計する段階で確認する。
+
+### 共通library化の判断基準
+
+Meridian計画内の複数Applicationで必要になるdomain処理は、特定UIへ埋め込まずlibrary化を優先する。一方、既存toolの責務をそのままRuntimeへ移植することは目的としない。
+
+初期候補は次の境界とする。
+
+```text
+robot-model
+  Robotの中立canonical domain
+
+robot-model-import
+  URDF / MJCF等 -> robot-model
+
+system-identification
+  SysID domain / dataset / result / calculation model boundary
+
+mujoco-adapter
+  canonical domain / SysID result -> MuJoCo
+
+device-io (仮称)
+  Real device command / measurement abstraction
+
+meridian-flow-adapter (仮称)
+  device-io <-> Meridian flow
+```
+
+`device-io` と `meridian-flow-adapter` は責務候補であり、crateとして分離するかは実装仕様で確定する。
+
 ## 12. Step 5との関係
 
 workflow-ide-framework Step 5では、このProject構造の全機能を実装しない。
@@ -774,5 +888,8 @@ File Explorer、完全なImport / Export UI、Resource Inspector等はFramework�
 43o. Robotのcanonical内部modelはURDF / MJCF / MuJoCo / Meridian固有構造をそのままdomain modelとせず、将来Open MeriForma等を扱える中立なRobot domainとして設計する。
 43p. SysID domain libraryはworkflow-ide-frameworkのWorkspace / Panel等へ依存させず、Application側UIからPublic APIを利用する。
 43q. MuJoCoへの展開はadapter境界で行い、canonical内部Definitionおよび同定済みparameterからMuJoCo実行表現を生成する。
+43r. robot-modelはRuntime IDE専用構造とせず、Meridian計画内の複数toolから利用可能な中立domain libraryを目標とする。
+43s. URDF Kitchenとは初期はURDF / MJCFのfile境界で協調し、Robot authoring UIの重複実装を基本としない。
+43t. Meridian flowとの実機command / measurementはSysID domainから分離したdevice I/O / adapter境界で扱い、Meridian ConsoleのUIやPython実装へsystem-identificationを直接依存させない。
 44. RuntimeはFramework所有の `project.toml`、`framework/`、Resource Registry永続化fileへ直接アクセスせず、Framework Public API / Adapter契約だけを使用する。
 45. `application.data_version` はRuntimeが意味を所有するが、Framework所有Project fileから直接取得・更新せず、FrameworkとのAPI境界を通して受け渡す。

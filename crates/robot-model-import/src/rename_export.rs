@@ -123,14 +123,14 @@ mod tests {
 
     #[test]
     fn rename_unreferenced_link_preserves_unknown_xml_and_order() {
-        let source = include_str!("../../../tests/fixtures/robot-model/mixed-order.urdf");
+        let source = r#"<robot name="r" xmlns:v="urn:test"><link name="base"><v:first/><visual><geometry><box size="1 1 1"/></geometry></visual><v:second/></link></robot>"#;
         let original = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let mut edited = original.clone();
         edited.links[0].name = "renamed_base".into();
         let output = export_renamed_source(source, &original, &edited).unwrap();
         assert!(output.contains("name=\"renamed_base\""));
         assert!(output.find("id=\"first\"").unwrap() < output.find("id=\"second\"").unwrap());
-        assert!(output.contains("vendor:between"));
+        assert!(output.contains("<v:second"));
     }
 
     #[test]

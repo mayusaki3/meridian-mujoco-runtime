@@ -82,3 +82,16 @@ ROS系からSansaXR系への基底変換は `(x,y,z) -> (-y,z,x)`、行列 `C` �
 - Asset参照解決のApplication integration契約
 
 これらは実装前に必要な範囲で決める。Meridian Console / URDF Kitchenの内部実装へ直接依存する設計にはしない。
+
+## 10. 初期技術選定（実装候補）
+
+- URDF Parser: `urdf-rs` 0.10系を第一候補とする。Link / Joint中心のparserであるため、未知要素・拡張属性の検出が十分かをfixtureで確認する。parserが未知要素を読み捨てる場合、別途XMLレベルの事前検査を設ける。silent discardは認めない。
+- 数学: `nalgebra` を第一候補とする。Vector3、UnitQuaternion、Isometry3、Matrix3等を内部計算に使用する。ただしdomain Public APIとcanonical JSONへライブラリ固有serialization形式を無条件に露出させない。
+- Domain ID: `uuid` 1系のUUID v4を新規entity生成の第一候補とする。再Importで既存entityとの対応を必要とする場合は名前だけの自動上書きではなく、source identityと既存domain IDの照合手順を別途定義する。
+- Persistence: `serde` / `serde_json` を初期候補とし、versioned DTOをdomainと分離する。初期JSON field名とmigration責務はschema確定時に決定する。
+- Crate分離: 初期は `robot-model` と `robot-model-import` を独立crate候補とし、persistenceとcoordinate adapterの別crate化は実装規模を見て判断する。
+
+`nalgebra` 0.35.0の公表MSRVはRust 1.89.0。実装環境のtoolchainが満たすか確認する。依存versionはCargo.lock等で検証時に固定する。
+
+この選定は資料20のテストケースを満たすことを条件とする。特にRM-011のunsupported diagnosticsとRM-024のURDF frame意味の保持をparser選定のgateとする。ライセンス、依存関係、Rust toolchain適合は実装時に最終確認する。
+

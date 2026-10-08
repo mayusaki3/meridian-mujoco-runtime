@@ -834,6 +834,54 @@ robot-modelはMuJoCoのmjModelやMJCF elementを保持しない。mujoco-adapter
 
 初期Rust実装はtest case文書を先に作成し、URDF fixture -> robot-model-import -> RobotDefinition -> structural validation -> canonical serialization -> deserialize -> domain structure一致確認、という小さいvertical sliceから開始する。SysID、MuJoCo、Meridian flowはこのsliceで基礎境界を確認した後に拡張する。
 
+## 11.4 座標系・単位系とVR連携の方針
+
+### canonical Robot座標系
+
+`robot-model` とMeridian Runtimeのcanonical Robot座標系は、ROSで一般的なREP-103のbody frame規約を基準とする。
+
+- 右手系
+- +X = 前、+Y = 左、+Z = 上
+- 長さ m、角度 rad、質量 kg、時間 s（SI単位）
+- World / Robot Base / Link / Joint / Component / Sensorのframeを区別し、transformの親子関係と表現元・表現先を明示する
+- Joint axisはそのJointに定義されたframeに対する値とし、座標軸の数値だけを別frameの値として扱わない
+
+ROSの全てのframeが同じ方向を向くという意味ではない。各frameは独立した姿勢を持つ。URDFのJoint origin / axisやLink visual / collision / inertial originのframe意味を保持してImportする。URDFを受け取るたびに機械的に軸を回転させない。
+
+### SansaXR / VRへの変換
+
+SansaXR側は+X右、+Y上、+Z前（左手系）、長さmの規約を使用する。Meridian Runtimeのcanonical座標は変更せず、VR側との境界で変換する。
+
+ROS body frameの成分をSansaXR frameへ対応させる基本変換は次の通り。
+
+```text
+x_vr = -y_ros
+y_vr =  z_ros
+z_vr =  x_ros
+
+C = [ 0 -1  0
+      0  0  1
+      1  0  0 ]
+```
+
+`det(C) = -1` であるため、これは右手系から左手系への基底変換であり、単なる3D回転ではない。位置・並進ベクトルは `p_vr = C p_ros`、姿勢の回転行列は `R_vr = C R_ros C^-1` とする。クォータニオン成分を軸名だけで入れ替えず、回転行列を介する等の検証済み変換を使用する。
+
+角速度・トルク等の軸性ベクトルは極性ベクトルと同じ変換を無条件に適用しない。座標系のhandednessと符号を考慮し、`a_vr = det(C) C a_ros` を基本とする。法線・メッシュ頂点順序・面の向き・慣性tensor・Joint回転方向等も対象の数学的性質に応じて変換・検証する。
+
+この式は、両システムで「前・左・上」が同じ物理方向を表すときの基本対応であり、World原点・Robot配置・各frameの姿勢が異なる場合は、追加のframe transformを合成する。
+
+### Adapter責務
+
+- `robot-model` はcanonical frame規約とframe間の関係を保持する。
+- `robot-model-import` はURDF / MJCF固有frameの意味を解釈し、canonical modelへ取り込む。
+- `mujoco-adapter` はMuJoCoへの展開時に必要なframe変換を担当する。
+- 将来のVR / CG adapterは、Runtime simulation resultを対象engine / SansaXR規約へ変換する。
+- Meridian flow / device I/Oの関節角度、encoder値、sensor値は、通信protocolの単位・符号・原点・frameを明示してcanonical signalへ正規化する。3D座標系と通信packet値を同一視しない。
+
+### 検証
+
+実装前test仕様へ、基底変換、逆変換、frame階層、姿勢、軸性ベクトル、Joint回転方向、mesh面の向き、unit conversionを追加する。単純な位置変換だけで座標系対応完了と判定しない。
+
 ## 12. Step 5との関係
 
 workflow-ide-framework Step 5では、このProject構造の全機能を実装しない。

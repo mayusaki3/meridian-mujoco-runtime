@@ -42,6 +42,24 @@ pub struct PlacementSnapshot {
     pub items: Vec<PlacedPreservedItem>,
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlacementError {
+    Conflict(String),
+    InvalidSource(MappingError),
+}
+
+impl std::fmt::Display for PlacementError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Conflict(message) => write!(f, "placement conflict: {message}"),
+            Self::InvalidSource(error) => write!(f, "invalid source: {error:?}"),
+        }
+    }
+}
+
+impl std::error::Error for PlacementError {}
+
 fn owner_for(
     node: Node<'_, '_>,
     mapping: &SourceMappingDocument,
@@ -264,6 +282,26 @@ impl PlacementSnapshot {
         Ok(())
     }
 
+
+    /// Typed fail-closed validation for keyed placement. Legacy unkeyed
+    /// snapshots must be explicitly upgraded, never silently reanchored.
+    pub fn check_anchors(
+        &self,
+        xml: &str,
+        mapping: &SourceMappingDocument,
+        graph: &SourceElementGraph,
+    ) -> Result<(), PlacementError> {
+        if self.items.iter().any(|item| item.placement.parent_key.is_none()) {
+            return Err(PlacementError::Conflict("unkeyed placement requires explicit upgrade".into()));
+        }
+        self.validate_with_graph(xml, mapping, graph)
+            .map_err(|error| match error {
+                MappingError::UnsupportedSchema(_) | MappingError::UnknownOwner(_) =>
+                    PlacementError::InvalidSource(error),
+                _ => PlacementError::Conflict(format!("{error:?}")),
+            })
+    }
+
     pub fn to_json(&self) -> Result<String, MappingError> {
         serde_json::to_string_pretty(self).map_err(|e| MappingError::Json(e.to_string()))
     }
@@ -429,6 +467,27 @@ mod tests {
         assert_eq!(snapshot.items.len(), 2);
         snapshot.items[1].source_key = snapshot.items[0].source_key;
         assert!(snapshot.validate_with_graph(xml, &mapping, &graph).is_err());
+    }
+
+    #[test]
+    fn typed_anchor_validation_accepts_keyed_source() {
+        let xml = r#"<robot name="r"><link name="a"><visual/><vendor/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &graph).unwrap();
+        assert_eq!(snapshot.check_anchors(xml, &mapping, &graph), Ok(()));
+    }
+
+    #[test]
+    fn typed_anchor_validation_rejects_legacy_and_tampered_keys() {
+        let xml = r#"<robot name="r"><link name="a"><visual/><vendor/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let legacy = PlacementSnapshot::from_source(xml, &mapping).unwrap();
+        assert!(matches!(legacy.check_anchors(xml, &mapping, &graph), Err(PlacementError::Conflict(_))));
+        let mut keyed = PlacementSnapshot::from_source_with_graph(xml, &mapping, &graph).unwrap();
+        keyed.items[0].placement.parent_key = Some(Uuid::new_v4());
+        assert!(matches!(keyed.check_anchors(xml, &mapping, &graph), Err(PlacementError::Conflict(_))));
     }
 
 }

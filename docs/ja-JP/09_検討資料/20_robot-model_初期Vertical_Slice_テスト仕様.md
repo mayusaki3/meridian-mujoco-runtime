@@ -135,7 +135,7 @@ byte単位のJSON一致は要求しない。
 
 **期待結果:** Robot構造を復元できる。元URDFを正本として要求しない。
 
-### RM-011 unsupported情報のdiagnostic
+### RM-011 unsupported情報のdiagnosticと非破壊保持
 
 **入力:** 初期Importerが対応しないURDF要素または属性を含むfixture。
 
@@ -143,6 +143,7 @@ byte単位のJSON一致は要求しない。
 
 - 対応可能なRobot構造までImportできる場合は成功値とdiagnosticを同時に返せる。
 - unsupported内容を識別できる。
+- 未対応要素・属性をPreserved Dataとして保持し、同一形式へのExportで復元できる。
 - silent discardしない。
 
 ### RM-012 malformed URDF
@@ -252,3 +253,65 @@ Project Resource Registryへの実登録はこのlibrary unit testの対象外�
 **期待結果:** 各要素のframe意味を維持してImportでき、URDF全体へ不要な固定90度回転を加えない。
 
 これらのうちVR描画やmesh表示のend-to-end確認はadapter統合テストに分類する。robot-model単体では変換数学とframe関係を検証する。
+
+## 8. 非破壊Import / Exportテスト
+
+### RM-025 未対応要素・属性の保持
+
+**入力:** 独自属性と未知子要素を持つURDF fixture。
+
+**期待結果:** Import後、元XMLがなくてもPreserved Dataと所有要素の対応を参照できる。診断のみで情報を破棄しない。
+
+### RM-026 canonical保存・再読込後の復元
+
+**入力:** RM-025のRobotDefinition。
+
+**操作:** canonical保存、再読込、URDF Export。
+
+**期待結果:** 未対応要素・属性の意味と階層・配置が維持される。元URDFファイルは不要。
+
+### RM-027 既知属性編集後のExport
+
+**入力:** 未対応情報を持つLink / Joint。
+
+**操作:** 既知のmass / limit等を編集してExport。
+
+**期待結果:** 既知属性は更新値、未対応属性・要素は保持値で出力される。
+
+### RM-028 名称変更とID対応
+
+**入力:** 未対応情報を持つLink。
+
+**操作:** Link表示名を変更してExport。
+
+**期待結果:** Source Mappingがdomain IDに追従し、未対応情報が正しいLinkに復元される。未知断片内の旧名参照は検出可能な場合に診断する。
+
+### RM-029 所有要素削除時のConflict
+
+**入力:** 未対応情報を持つLink / Joint。
+
+**操作:** 所有要素を削除してExport。
+
+**期待結果:** 未対応情報を黙って破棄・別要素へ移動せず、復元不能のdiagnosticを返す。通常のlossless Export成功とはしない。
+
+### RM-030 復元先の衝突・曖昧さ
+
+**入力:** 変更後のRobot構造でSource Mappingの復元先が一意に決まらないfixture。
+
+**期待結果:** Conflictを報告し、自動的な誤配置をしない。
+
+### RM-031 異形式Export
+
+**入力:** URDF固有のPreserved Dataを含むRobotDefinition。
+
+**操作:** 将来のMJCF等へのExportを想定。
+
+**期待結果:** URDF固有断片を無条件にMJCFへ混入しない。未表現情報の診断・明示的なlossy扱いを要求する。
+
+### RM-032 XML保持境界
+
+**入力:** コメント、CDATA、名前空間、属性順序、空白等を含むfixture。
+
+**期待結果:** 保持保証範囲をformat adapterの仕様で明示し、保証対象を保存・復元できる。byte一致を保証しない情報は診断・仕様で明確化する。
+
+実装順序はRM-025〜RM-030をURDF Import / Exportの初期完了条件へ含める。RM-031は異形式Exporter導入時のgate、RM-032はXML保持保証範囲確定後に期待値を具体化する。

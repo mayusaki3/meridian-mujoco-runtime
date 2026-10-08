@@ -218,6 +218,52 @@ impl PlacementSnapshot {
         Ok(())
     }
 
+
+    /// Validate persisted, keyed placement against the exact source graph.
+    /// No key regeneration or implicit reanchoring is allowed.
+    pub fn validate_with_graph(
+        &self,
+        xml: &str,
+        mapping: &SourceMappingDocument,
+        graph: &SourceElementGraph,
+    ) -> Result<(), MappingError> {
+        if self.schema_version != 1 {
+            return Err(MappingError::UnsupportedSchema(self.schema_version));
+        }
+        graph.validate()?;
+        let current = Self::from_source_with_graph(xml, mapping, graph)?;
+        if self.items.len() != current.items.len() {
+            return Err(MappingError::Json("placement item count changed".into()));
+        }
+        let mut keys = std::collections::HashSet::new();
+        let graph_keys: std::collections::HashSet<_> =
+            graph.elements.iter().map(|e| e.key).collect();
+        for (saved, observed) in self.items.iter().zip(&current.items) {
+            if !keys.insert(saved.source_key) {
+                return Err(MappingError::Json("duplicate preserved source key".into()));
+            }
+            if saved.owner != observed.owner
+                || saved.placement != observed.placement
+                || saved.payload != observed.payload {
+                return Err(MappingError::Json("preserved placement or anchor conflict".into()));
+            }
+            match &saved.payload {
+                PreservedPayload::Element { .. } => {
+                    if saved.source_key != observed.source_key
+                        || !graph_keys.contains(&saved.source_key) {
+                        return Err(MappingError::Json("preserved element key conflict".into()));
+                    }
+                }
+                PreservedPayload::Attribute { .. } => {
+                    if graph_keys.contains(&saved.source_key) {
+                        return Err(MappingError::Json("attribute key collides with element".into()));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn to_json(&self) -> Result<String, MappingError> {
         serde_json::to_string_pretty(self).map_err(|e| MappingError::Json(e.to_string()))
     }
@@ -335,6 +381,54 @@ mod tests {
         let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
         let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
         assert!(PlacementSnapshot::from_source_with_graph(changed, &mapping, &graph).is_err());
+    }
+
+    #[test]
+    fn keyed_validation_accepts_original_and_json_roundtrip() {
+        let xml = r#"<robot name="r" custom="x"><link name="a"><visual/><vendor/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &graph).unwrap();
+        let restored = PlacementSnapshot::from_json(&snapshot.to_json().unwrap()).unwrap();
+        restored.validate_with_graph(xml, &mapping, &graph).unwrap();
+    }
+
+    #[test]
+    fn keyed_validation_rejects_modified_parent_and_sibling_anchors() {
+        let xml = r#"<robot name="r"><link name="a"><visual/><vendor/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &graph).unwrap();
+        let mut bad_parent = snapshot.clone();
+        bad_parent.items[0].placement.parent_key = Some(Uuid::new_v4());
+        assert!(bad_parent.validate_with_graph(xml, &mapping, &graph).is_err());
+        let mut bad_sibling = snapshot.clone();
+        bad_sibling.items[0].placement.previous_sibling_key = None;
+        assert!(bad_sibling.validate_with_graph(xml, &mapping, &graph).is_err());
+    }
+
+    #[test]
+    fn keyed_validation_rejects_changed_element_key_and_source() {
+        let xml = r#"<robot name="r"><link name="a"><visual/><vendor/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &graph).unwrap();
+        let mut changed_key = snapshot.clone();
+        changed_key.items[0].source_key = Uuid::new_v4();
+        assert!(changed_key.validate_with_graph(xml, &mapping, &graph).is_err());
+        let changed_xml = xml.replace("<vendor/>", "<other/>");
+        assert!(snapshot.validate_with_graph(&changed_xml, &mapping, &graph).is_err());
+    }
+
+    #[test]
+    fn keyed_validation_rejects_duplicate_attribute_key() {
+        let xml = r#"<robot name="r" custom="x" other="y"/>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let mut snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &graph).unwrap();
+        assert_eq!(snapshot.items.len(), 2);
+        snapshot.items[1].source_key = snapshot.items[0].source_key;
+        assert!(snapshot.validate_with_graph(xml, &mapping, &graph).is_err());
     }
 
 }

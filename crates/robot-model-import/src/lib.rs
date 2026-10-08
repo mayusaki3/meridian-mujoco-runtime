@@ -26,7 +26,7 @@ pub enum InspectError {
 
 fn known_child(parent: &str, child: &str) -> bool {
     match parent {
-        "robot" => matches!(child, "link" | "joint" | "material" | "gazebo" | "transmission"),
+        "robot" => matches!(child, "link" | "joint"),
         "link" => matches!(child, "inertial" | "visual" | "collision"),
         "joint" => matches!(child, "parent" | "child" | "origin" | "axis" | "limit" | "dynamics" | "mimic" | "safety_controller" | "calibration"),
         "inertial" => matches!(child, "origin" | "mass" | "inertia"),
@@ -46,6 +46,11 @@ fn known_attr(element: &str, attr: &str) -> bool {
         "limit" => matches!(attr, "lower" | "upper" | "effort" | "velocity"),
         "mass" => attr == "value",
         "inertia" => matches!(attr, "ixx" | "ixy" | "ixz" | "iyy" | "iyz" | "izz"),
+        "box" => attr == "size",
+        "cylinder" => matches!(attr, "radius" | "length"),
+        "sphere" => attr == "radius",
+        "mesh" => matches!(attr, "filename" | "scale"),
+        "material" => attr == "name",
         _ => false,
     }
 }
@@ -154,6 +159,20 @@ mod tests {
         assert_eq!(parts.len(), 2);
         assert!(parts[0].xml.contains("first"));
         assert!(parts[1].xml.contains("second"));
+    }
+
+    #[test]
+    fn preserve_unsupported_top_level_extension() {
+        let xml = r#"<robot name="r"><gazebo reference="base"><plugin name="x"/></gazebo><link name="base"/></robot>"#;
+        let result = inspect_urdf(xml).unwrap();
+        assert!(result.preserved.iter().any(|p| p.owner == "robot" && p.xml.contains("<plugin")));
+    }
+
+    #[test]
+    fn preserve_unknown_link_attribute() {
+        let xml = r#"<robot name="r"><link name="base" custom="value"/></robot>"#;
+        let result = inspect_urdf(xml).unwrap();
+        assert!(result.preserved.iter().any(|p| p.owner == "link:base" && p.xml.contains("custom")));
     }
 
     #[test]

@@ -1,6 +1,8 @@
 //! Initial read-only URDF XML inspection. No lossy exporter is exposed.
 use roxmltree::Document;
 
+pub mod source_mapping;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreservedItem {
     pub owner: String,

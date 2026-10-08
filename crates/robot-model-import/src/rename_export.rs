@@ -86,16 +86,48 @@ pub fn export_renamed_source(
             replacements.push((start + at, start + at + len, replacement));
         }
     }
-    // A renamed Link may be referenced by known joint parent/child attributes.
-    // Until those references are updated safely, refuse such exports.
-    for (before, after) in original.links.iter().zip(&edited.links) {
-        if before.name != after.name {
-            let referenced = root.descendants().filter(|n| n.is_element()
-                && matches!(n.tag_name().name(), "parent" | "child"))
-                .any(|n| n.attribute("link") == Some(before.name.as_str()));
-            if referenced {
-                return Err(ExportError::Conflict("renamed link has joint references; rewriting not yet supported".into()));
+    // Unknown XML may contain semantic references which cannot be rewritten safely.
+    // Only permit renaming if every preserved payload is free of the old name.
+    for before in &original.links {
+        let after = edited.links.iter().find(|v| v.id == before.id)
+            .ok_or_else(|| ExportError::Conflict("link owner deleted".into()))?;
+        if before.name == after.name { continue; }
+        if original.preserved.iter().any(|p| p.xml.contains(&before.name)) {
+            return Err(ExportError::Conflict(format!(
+                "preserved XML may reference renamed link: {}", before.name
+            )));
+        }
+    }
+    // Patch only known URDF joint parent/child link attributes.
+    for joint in root.children().filter(|n| n.is_element()
+        && n.tag_name().namespace().is_none() && n.tag_name().name() == "joint") {
+        for child in joint.children().filter(|n| n.is_element()
+            && n.tag_name().namespace().is_none()
+            && matches!(n.tag_name().name(), "parent" | "child")) {
+            let Some(link_name) = child.attribute("link") else { continue };
+            let Some(before) = original.links.iter().find(|v| v.name == link_name) else { continue };
+            let after = edited.links.iter().find(|v| v.id == before.id)
+                .ok_or_else(|| ExportError::Conflict("link owner deleted".into()))?;
+            if after.name == before.name { continue; }
+            let start = child.range().start;
+            let text = &source_xml[start..child.range().end];
+            let end = text.find('>').ok_or_else(|| ExportError::Conflict("missing reference tag".into()))?;
+            let head = &text[..end];
+            let mut found = Vec::new();
+            for quote in ['"', '\\''] {
+                let needle = format!("link={quote}{}{quote}", before.name);
+                if let Some(at) = head.find(&needle) {
+                    if at > 0 && head.as_bytes()[at - 1].is_ascii_whitespace() {
+                        found.push((at, needle.len(), quote));
+                    }
+                }
             }
+            if found.len() != 1 {
+                return Err(ExportError::Conflict("joint link attribute cannot be safely patched".into()));
+            }
+            let (at, len, quote) = found[0];
+            replacements.push((start + at, start + at + len,
+                format!("link={quote}{}{quote}", xml_attribute_escape(&after.name, quote))));
         }
     }
     // Prevent changes to source ownership and unsupported preserved information.
@@ -134,12 +166,36 @@ mod tests {
     }
 
     #[test]
-    fn reject_rename_when_joint_references_link() {
+    fn reject_rename_when_preserved_xml_may_reference_link() {
         let source = include_str!("../../../tests/fixtures/robot-model/unknown-extension.urdf");
         let original = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let mut edited = original.clone();
         edited.links[0].name = "renamed".into();
         assert!(matches!(export_renamed_source(source, &original, &edited), Err(ExportError::Conflict(_))));
+    }
+
+    #[test]
+    fn rename_link_updates_joint_parent_and_child() {
+        let source = r#"<robot name="r"><link name="a"/><link name="b"/><joint name="j" type="fixed"><parent link="a"/><child link="b"/></joint></robot>"#;
+        let original = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mut edited = original.clone();
+        edited.links[0].name = "new_a".into();
+        edited.links[1].name = "new_b".into();
+        let output = export_renamed_source(source, &original, &edited).unwrap();
+        assert!(output.contains(r#"<parent link="new_a"/>"#));
+        assert!(output.contains(r#"<child link="new_b"/>"#));
+    }
+
+    #[test]
+    fn swapped_link_names_update_references_by_identity() {
+        let source = r#"<robot name="r"><link name="a"/><link name="b"/><joint name="j" type="fixed"><parent link="a"/><child link="b"/></joint></robot>"#;
+        let original = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mut edited = original.clone();
+        edited.links[0].name = "b".into();
+        edited.links[1].name = "a".into();
+        let output = export_renamed_source(source, &original, &edited).unwrap();
+        assert!(output.contains(r#"<parent link="b"/>"#));
+        assert!(output.contains(r#"<child link="a"/>"#));
     }
 
     #[test]

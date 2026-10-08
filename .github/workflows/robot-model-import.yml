@@ -1,0 +1,24 @@
+name: robot-model-import checks
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'crates/robot-model-import/**'
+      - 'tests/fixtures/robot-model/**'
+      - '.github/workflows/robot-model-import.yml'
+  pull_request:
+    paths:
+      - 'crates/robot-model-import/**'
+      - 'tests/fixtures/robot-model/**'
+      - '.github/workflows/robot-model-import.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test standalone importer
+        run: cargo test --manifest-path crates/robot-model-import/Cargo.toml --all-targets

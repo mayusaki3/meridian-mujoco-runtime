@@ -119,6 +119,36 @@ impl PlacementSnapshot {
         Ok(Self { schema_version: 1, items })
     }
 
+
+    /// Validate a snapshot against its source. Never infer a new position when
+    /// the original element index or parent path no longer matches.
+    pub fn validate_against_source(
+        &self,
+        xml: &str,
+        mapping: &SourceMappingDocument,
+    ) -> Result<(), MappingError> {
+        if self.schema_version != 1 {
+            return Err(MappingError::UnsupportedSchema(self.schema_version));
+        }
+        let current = Self::from_source(xml, mapping)?;
+        if self.items.len() != current.items.len() {
+            return Err(MappingError::Json("placement item count changed".into()));
+        }
+        let mut keys = std::collections::HashSet::new();
+        for (saved, observed) in self.items.iter().zip(&current.items) {
+            if !keys.insert(saved.source_key) {
+                return Err(MappingError::Json("duplicate source key".into()));
+            }
+            if saved.owner != observed.owner
+                || saved.placement != observed.placement
+                || saved.payload != observed.payload
+            {
+                return Err(MappingError::Json("placement or preserved payload changed".into()));
+            }
+        }
+        Ok(())
+    }
+
     pub fn to_json(&self) -> Result<String, MappingError> {
         serde_json::to_string_pretty(self).map_err(|e| MappingError::Json(e.to_string()))
     }
@@ -186,4 +216,33 @@ mod tests {
         assert_eq!(PlacementSnapshot::from_json(&snapshot.to_json().unwrap()),
             Err(MappingError::UnsupportedSchema(2)));
     }
+    #[test]
+    fn validation_accepts_original_source() {
+        let xml = r#"<robot name="r"><link name="a"><visual/><extra/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let snapshot = PlacementSnapshot::from_source(xml, &mapping).unwrap();
+        assert!(snapshot.validate_against_source(xml, &mapping).is_ok());
+    }
+
+    #[test]
+    fn validation_rejects_shifted_sibling() {
+        let xml = r#"<robot name="r"><link name="a"><visual/><extra/></link></robot>"#;
+        let changed = r#"<robot name="r"><link name="a"><extra/><visual/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let snapshot = PlacementSnapshot::from_source(xml, &mapping).unwrap();
+        assert!(snapshot.validate_against_source(changed, &mapping).is_err());
+    }
+
+    #[test]
+    fn validation_rejects_modified_payload_and_duplicate_keys() {
+        let xml = r#"<robot name="r"><link name="a"><extra x="1"/><extra y="2"/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let snapshot = PlacementSnapshot::from_source(xml, &mapping).unwrap();
+        let changed = xml.replace("x=\"1\"", "x=\"3\"");
+        assert!(snapshot.validate_against_source(&changed, &mapping).is_err());
+        let mut duplicated = snapshot.clone();
+        duplicated.items[1].source_key = duplicated.items[0].source_key;
+        assert!(duplicated.validate_against_source(xml, &mapping).is_err());
+    }
+
 }

@@ -5,6 +5,7 @@ pub mod source_mapping;
 pub mod rename_export;
 pub mod placement;
 pub mod source_element_graph;
+pub mod relocation;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreservedItem {

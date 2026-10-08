@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot name="mixed" xmlns:vendor="urn:meridian:test:vendor">
+  <link name="base_link"><visual><origin xyz="0 0 0"/><geometry><box size="1 1 1"/></geometry></visual><vendor:between id="first"/><collision><geometry><box size="1 1 1"/></geometry></collision><vendor:between id="second"/></link>
+  <link name="link_1"/>
+  <joint name="joint_1" type="fixed"><parent link="base_link"/><child link="link_1"/></joint>
+</robot>

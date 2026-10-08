@@ -129,7 +129,7 @@ mod tests {
         edited.links[0].name = "renamed_base".into();
         let output = export_renamed_source(source, &original, &edited).unwrap();
         assert!(output.contains("name=\"renamed_base\""));
-        assert!(output.find("id=\"first\"").unwrap() < output.find("id=\"second\"").unwrap());
+        assert!(output.find("<v:first").unwrap() < output.find("<v:second").unwrap());
         assert!(output.contains("<v:second"));
     }
 

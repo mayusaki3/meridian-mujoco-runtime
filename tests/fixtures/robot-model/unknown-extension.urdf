@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<robot name="extended" xmlns:vendor="urn:meridian:test:vendor" vendor:revision="r1">
+  <vendor:metadata vendor:owner="fixture"><vendor:note>preserve me</vendor:note></vendor:metadata>
+  <link name="base_link" vendor:material="custom">
+    <vendor:calibration offset="0.125"><vendor:sample>42</vendor:sample></vendor:calibration>
+  </link>
+  <link name="link_1"/>
+  <joint name="joint_1" type="revolute" vendor:mode="custom">
+    <parent link="base_link"/><child link="link_1"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/><axis xyz="0 1 0"/>
+    <limit lower="-1" upper="1" effort="5" velocity="2"/>
+    <vendor:control gain="3"/>
+  </joint>
+</robot>

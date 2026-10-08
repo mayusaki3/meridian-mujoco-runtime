@@ -114,7 +114,7 @@ pub fn export_renamed_source(
             let end = text.find('>').ok_or_else(|| ExportError::Conflict("missing reference tag".into()))?;
             let head = &text[..end];
             let mut found = Vec::new();
-            for quote in ['"', '\\''] {
+            for quote in ['"', '\''] {
                 let needle = format!("link={quote}{}{quote}", before.name);
                 if let Some(at) = head.find(&needle) {
                     if at > 0 && head.as_bytes()[at - 1].is_ascii_whitespace() {

@@ -95,3 +95,36 @@ ROS系からSansaXR系への基底変換は `(x,y,z) -> (-y,z,x)`、行列 `C` �
 
 この選定は資料20のテストケースを満たすことを条件とする。特にRM-011のunsupported diagnosticsとRM-024のURDF frame意味の保持をparser選定のgateとする。ライセンス、依存関係、Rust toolchain適合は実装時に最終確認する。
 
+
+## 11. 未対応データの非破壊保持とExport復元
+
+SansaVRMと同様に、Import時に未対応情報を捨てず、canonical保存・再読込・既知項目の編集後も保持し、同一形式へのExportで復元できることを基本要件とする。診断だけ出して破棄する方式は不可。
+
+### 11.1 モデルと形式固有情報の分離
+
+- Known Data: robot-modelが解釈するLink、Joint、Frame、Inertial等。
+- Preserved Data: importerが意味を解釈しない要素・属性・拡張情報。source formatとformat version（判別可能な場合）、元のXML断片またはlossless表現、順序・配置情報を保持する。
+- Source Mapping: source要素の安定した参照先とdomain IDの対応を保持する。Link / Jointの表示名変更だけで紐付けを失わない。
+- Canonical persistenceはPreserved DataとSource Mappingも保存する。元ファイルの存在を復元の前提としない。
+
+形式固有のXML構造をrobot-modelの物理domain属性へ無理に変換しない。URDF、将来のMJCF等の保持・復元規則は各format adapterが担当する。
+
+### 11.2 Export規則
+
+1. 既知項目は現在のcanonical modelから出力する。
+2. 未対応項目はSource Mappingに従って元の位置・順序・所有要素へ復元する。
+3. Link / Jointの名称変更後もdomain IDに紐付いた未対応項目を復元する。未対応断片内部の文字列参照を自動的に書き換えられるとは限らないため、参照の曖昧さは診断する。
+4. 削除された所有要素、構造変更による配置先不明、名前衝突等はConflict / Unresolvedとして扱い、黙って破棄・別要素へ移動しない。
+5. 完全復元できない場合、lossless Export成功と報告しない。通常Exportは失敗または明示的な利用者判断を必要とする。lossy Exportは別操作として扱い、失われる内容を列挙する。
+
+保証するのは未対応情報の意味と構造の保持であり、既知項目編集後のXML全体のbyte一致ではない。コメント、CDATA、名前空間、属性順序、空白等をどこまでbyte保存するかはformatごとに明示する。
+
+### 11.3 Parser選定への影響
+
+`urdf-rs` は既知URDF構造の解釈候補として維持するが、それだけでlossless preservationを保証しない。原文XMLの構造・未対応要素・属性を把握できるXMLイベント/ツリー解析層（例: `quick-xml`）を併用する案を採用候補とする。両解析結果の要素対応と、変更箇所への復元を検証する。
+
+Importerは、未対応情報を発見したときdiagnosticとpreserved payloadを同時に返す。形式固有の未対応情報を単なるWarningに置き換えない。
+
+### 11.4 追加検証
+
+テスト仕様20のRM-011を「検出・保持・再Export」へ強化し、RM-025以降でcanonical round-trip、既知属性編集、名称変更、要素削除、参照衝突、異形式Export時の扱いを検証する。

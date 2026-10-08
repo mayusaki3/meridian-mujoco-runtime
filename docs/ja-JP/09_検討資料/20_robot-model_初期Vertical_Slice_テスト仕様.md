@@ -194,3 +194,61 @@ Project Resource Registryへの実登録はこのlibrary unit testの対象外�
 - Import diagnosticsの最低限の分類
 
 上記確定後、RM-001から順にtestを実装し、対象scopeのunit test coverage 100%を目標とする。
+
+## 7. 座標・単位・frame変換テスト
+
+### RM-016 基底軸の変換
+
+**入力:** ROS body frameの単位基底 (+X前、+Y左、+Z上)。
+
+**期待結果:** SansaXR座標ではそれぞれ (+Z前、-X左、+Y上) となる。
+
+### RM-017 位置変換の逆変換
+
+**入力:** 任意の位置ベクトル。
+
+**期待結果:** ROS -> VR -> ROSの往復で元の値へ許容誤差内で復元できる。
+
+### RM-018 姿勢変換
+
+**入力:** 既知のJoint/Robot姿勢を表す回転行列。
+
+**期待結果:** `R_vr = C R_ros C^-1` で変換され、変換後も正規直交性とdet=+1を維持する。
+
+### RM-019 軸性ベクトル
+
+**入力:** ROS frameの角速度またはトルク。
+
+**期待結果:** 右手系から左手系への変換で `det(C) C` を適用し、物理的な回転向きが一致する。
+
+### RM-020 Frame階層
+
+**入力:** World -> Robot Base -> Link -> Jointの非自明な並進・回転を持つfixture。
+
+**期待結果:** frame transformの合成と逆変換が成立し、Joint axisを誤ったframeへ解釈しない。
+
+### RM-021 Joint回転方向
+
+**入力:** 正方向へ回転するrevolute Joint。
+
+**期待結果:** ROS側の正方向とVR表示側の動きが物理的に一致する。軸性ベクトルの符号反転を考慮する。
+
+### RM-022 Mesh面の向き
+
+**入力:** 向きが既知の三角形mesh。
+
+**期待結果:** handedness変更後も表示面の表裏が意図どおりで、必要な頂点順序または描画設定の変換が行われる。
+
+### RM-023 単位系
+
+**入力:** 長さ、角度、質量、時間、および外部protocolの別単位で表された値。
+
+**期待結果:** canonical値はm、rad、kg、sとなり、変換の適用箇所が明示される。単位を持たないraw packet値をcanonical物理量として誤認しない。
+
+### RM-024 URDF frame意味の保持
+
+**入力:** Link visual / collision / inertial originおよびJoint origin / axisが異なるfixture。
+
+**期待結果:** 各要素のframe意味を維持してImportでき、URDF全体へ不要な固定90度回転を加えない。
+
+これらのうちVR描画やmesh表示のend-to-end確認はadapter統合テストに分類する。robot-model単体では変換数学とframe関係を検証する。

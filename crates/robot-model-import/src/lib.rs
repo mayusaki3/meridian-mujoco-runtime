@@ -3,6 +3,7 @@ use roxmltree::Document;
 
 pub mod source_mapping;
 pub mod rename_export;
+pub mod placement;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreservedItem {
@@ -27,7 +28,7 @@ pub enum InspectError {
     MissingName(String),
 }
 
-fn known_child(parent: &str, child: &str) -> bool {
+pub(crate) fn known_child(parent: &str, child: &str) -> bool {
     match parent {
         "robot" => matches!(child, "link" | "joint"),
         "link" => matches!(child, "inertial" | "visual" | "collision"),
@@ -39,7 +40,7 @@ fn known_child(parent: &str, child: &str) -> bool {
     }
 }
 
-fn known_attr(element: &str, attr: &str) -> bool {
+pub(crate) fn known_attr(element: &str, attr: &str) -> bool {
     match element {
         "robot" | "link" => attr == "name",
         "joint" => matches!(attr, "name" | "type"),

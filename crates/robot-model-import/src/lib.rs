@@ -2,6 +2,7 @@
 use roxmltree::Document;
 
 pub mod source_mapping;
+pub mod rename_export;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreservedItem {

@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn reject_rename_when_preserved_xml_may_reference_link() {
-        let source = include_str!("../../../tests/fixtures/robot-model/unknown-extension.urdf");
+        let source = r#"<robot name="r" xmlns:v="urn:test"><link name="base"><v:binding target="base"/></link></robot>"#;
         let original = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let mut edited = original.clone();
         edited.links[0].name = "renamed".into();

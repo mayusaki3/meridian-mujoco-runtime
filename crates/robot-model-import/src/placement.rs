@@ -1,6 +1,7 @@
 //! Structured placement snapshot for unknown URDF XML data.
 //! Read-only metadata: reinsertion into a regenerated document is not yet supported.
 use crate::source_mapping::{MappingError, SourceMappingDocument, SourceOwner};
+use crate::source_element_graph::SourceElementGraph;
 use roxmltree::{Document, Node};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -19,6 +20,12 @@ pub struct Placement {
     pub parent_path: Vec<usize>,
     /// Index among element children; None for an attribute on parent_path.
     pub sibling_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_key: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_sibling_key: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_sibling_key: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,7 +81,7 @@ fn collect(
             items.push(PlacedPreservedItem {
                 source_key: Uuid::new_v4(),
                 owner: owner.clone(),
-                placement: Placement { parent_path: path.clone(), sibling_index: None },
+                placement: Placement { parent_path: path.clone(), sibling_index: None, parent_key: None, previous_sibling_key: None, next_sibling_key: None },
                 payload: PreservedPayload::Attribute {
                     local_name: attr.name().into(),
                     namespace_uri: attr.namespace().map(str::to_owned),
@@ -90,7 +97,7 @@ fn collect(
             items.push(PlacedPreservedItem {
                 source_key: Uuid::new_v4(),
                 owner: owner.clone(),
-                placement: Placement { parent_path: path.clone(), sibling_index: Some(index) },
+                placement: Placement { parent_path: path.clone(), sibling_index: Some(index), parent_key: None, previous_sibling_key: None, next_sibling_key: None },
                 payload: PreservedPayload::Element { xml: xml[child.range()].into() },
             });
         } else {
@@ -119,6 +126,68 @@ impl PlacementSnapshot {
         Ok(Self { schema_version: 1, items })
     }
 
+
+
+    /// Build placement with element keys shared with a previously constructed
+    /// source graph. Unknown element keys are the graph's own keys; unknown
+    /// attributes retain independent keys and anchor to their containing element.
+    pub fn from_source_with_graph(
+        xml: &str,
+        mapping: &SourceMappingDocument,
+        graph: &SourceElementGraph,
+    ) -> Result<Self, MappingError> {
+        graph.validate()?;
+        let doc = Document::parse(xml).map_err(|e| MappingError::Json(e.to_string()))?;
+        let root = doc.root_element();
+        if root.tag_name().name() != "robot" || root.tag_name().namespace().is_some()
+            || root.attribute("name") != Some(mapping.robot_name.as_str()) {
+            return Err(MappingError::UnknownOwner("source robot mismatch".into()));
+        }
+        let mut nodes = std::collections::HashMap::new();
+        fn index_nodes<'a, 'input>(
+            node: Node<'a, 'input>, path: Vec<usize>,
+            result: &mut std::collections::HashMap<Vec<usize>, Node<'a, 'input>>,
+        ) {
+            result.insert(path.clone(), node);
+            for (i, child) in node.children().filter(|n| n.is_element()).enumerate() {
+                let mut child_path = path.clone();
+                child_path.push(i);
+                index_nodes(child, child_path, result);
+            }
+        }
+        index_nodes(root, Vec::new(), &mut nodes);
+        if graph.elements.len() != nodes.len() {
+            return Err(MappingError::Json("source graph element count mismatch".into()));
+        }
+        let mut by_path = std::collections::HashMap::new();
+        for element in &graph.elements {
+            let node = nodes.get(&element.path)
+                .ok_or_else(|| MappingError::Json("graph path missing in source".into()))?;
+            if node.tag_name().name() != element.local_name
+                || node.tag_name().namespace() != element.namespace_uri.as_deref()
+                || node.attribute("name") != element.name_attribute.as_deref()
+                || owner_for(*node, mapping)? != element.owner {
+                return Err(MappingError::Json("graph source identity mismatch".into()));
+            }
+            by_path.insert(element.path.clone(), element);
+        }
+        let mut snapshot = Self::from_source(xml, mapping)?;
+        for item in &mut snapshot.items {
+            let parent = by_path.get(&item.placement.parent_path)
+                .ok_or_else(|| MappingError::Json("placement parent missing".into()))?;
+            item.placement.parent_key = Some(parent.key);
+            if let Some(index) = item.placement.sibling_index {
+                let mut path = item.placement.parent_path.clone();
+                path.push(index);
+                let element = by_path.get(&path)
+                    .ok_or_else(|| MappingError::Json("preserved element missing".into()))?;
+                item.source_key = element.key;
+                item.placement.previous_sibling_key = element.previous_sibling_key;
+                item.placement.next_sibling_key = element.next_sibling_key;
+            }
+        }
+        Ok(snapshot)
+    }
 
     /// Validate a snapshot against its source. Never infer a new position when
     /// the original element index or parent path no longer matches.
@@ -243,6 +312,29 @@ mod tests {
         let mut duplicated = snapshot.clone();
         duplicated.items[1].source_key = duplicated.items[0].source_key;
         assert!(duplicated.validate_against_source(xml, &mapping).is_err());
+    }
+
+    #[test]
+    fn graph_and_placement_share_unknown_element_keys() {
+        let xml = r#"<robot name="r"><link name="a"><visual/><vendor x="1"/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &graph).unwrap();
+        let vendor = graph.elements.iter().find(|e| e.local_name == "vendor").unwrap();
+        let item = snapshot.items.iter().find(|i| matches!(&i.payload, PreservedPayload::Element { xml } if xml.contains("<vendor"))).unwrap();
+        assert_eq!(item.source_key, vendor.key);
+        assert_eq!(item.placement.parent_key, vendor.parent_key);
+        assert_eq!(item.placement.previous_sibling_key, vendor.previous_sibling_key);
+        assert_eq!(PlacementSnapshot::from_json(&snapshot.to_json().unwrap()).unwrap(), snapshot);
+    }
+
+    #[test]
+    fn graph_mismatch_is_rejected() {
+        let xml = r#"<robot name="r"><link name="a"><vendor/></link></robot>"#;
+        let changed = r#"<robot name="r"><link name="a"><other/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        assert!(PlacementSnapshot::from_source_with_graph(changed, &mapping, &graph).is_err());
     }
 
 }

@@ -537,4 +537,51 @@ mod tests {
         assert_eq!(children[1].attribute("custom"), Some("correct"));
     }
 
+    #[test]
+    fn restores_nested_attributes_after_multiple_ancestor_insertions() {
+        let source = r#"<robot name="r"><extension/><link name="a"><vendor/><visual custom="visual"/><collision custom="collision"/></link></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"><visual/><collision/></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "extension" && e.local_name != "vendor");
+        let link = edited.elements.iter_mut().find(|e| e.local_name == "link").unwrap();
+        link.path = vec![0];
+        link.previous_sibling_key = None;
+        for element in &mut edited.elements {
+            if element.local_name == "visual" {
+                element.path = vec![0, 0];
+                element.previous_sibling_key = None;
+            } else if element.local_name == "collision" {
+                element.path = vec![0, 1];
+            }
+        }
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        let doc = Document::parse(&output).unwrap();
+        let root_children: Vec<_> = doc.root_element().children().filter(|n| n.is_element()).collect();
+        assert_eq!(root_children[0].tag_name().name(), "extension");
+        let link_children: Vec<_> = root_children[1].children().filter(|n| n.is_element()).collect();
+        assert_eq!(link_children[0].tag_name().name(), "vendor");
+        assert_eq!(link_children[1].attribute("custom"), Some("visual"));
+        assert_eq!(link_children[2].attribute("custom"), Some("collision"));
+    }
+
+    #[test]
+    fn rejects_attribute_owner_mismatch_after_element_reinsertion() {
+        let source = r#"<robot name="r"><extension/><link name="a" custom="value"/></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let mut snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "extension");
+        let link = edited.elements.iter_mut().find(|e| e.local_name == "link").unwrap();
+        link.path = vec![0];
+        link.previous_sibling_key = None;
+        let attr = snapshot.items.iter_mut().find(|i| matches!(i.payload, PreservedPayload::Attribute { .. })).unwrap();
+        attr.owner = edited.elements[0].owner.clone();
+        assert!(restore_elements(edited_xml, &snapshot, &original, &edited).is_err());
+    }
+
 }

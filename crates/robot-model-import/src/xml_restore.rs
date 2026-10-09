@@ -1,5 +1,4 @@
-//! Fail-closed XML restoration. Element insertion into self-closing
-//! parents remains unsupported until lossless handling exists.
+//! Fail-closed XML restoration with keyed element and attribute placement.
 use crate::placement::{PlacementError, PlacementSnapshot, PreservedPayload};
 use crate::relocation::{plan_relocation, validate_relocation_plan};
 use crate::source_element_graph::SourceElementGraph;
@@ -89,6 +88,7 @@ pub fn restore_elements(
     let old: HashMap<_, _> = original.elements.iter().map(|e| (e.key, e)).collect();
     let preserved: HashSet<_> = snapshot.items.iter().map(|i| i.source_key).collect();
     let mut insertions: HashMap<usize, Vec<(Vec<usize>, &str)>> = HashMap::new();
+    let mut self_closing: HashMap<usize, String> = HashMap::new();
     for entry in &plan {
         let item = snapshot.items.iter().find(|i| i.source_key == entry.source_key)
             .ok_or_else(|| conflict("preserved item missing"))?;
@@ -113,11 +113,21 @@ pub fn restore_elements(
             }
             neighbor.range().start
         } else {
-            // Locate the actual closing tag, rejecting self-closing parents.
             let raw = &edited_xml[parent.range()];
-            let closing = format!("</{}", parent.tag_name().name());
-            let relative = raw.rfind(&closing).ok_or_else(|| conflict("self-closing parent not supported"))?;
-            parent.range().start + relative
+            let opening_end = opening_tag_end(raw).ok_or_else(|| conflict("invalid parent start tag"))?;
+            if raw[opening_end..].starts_with("/>") {
+                let qualified_name = raw.strip_prefix('<')
+                    .and_then(|head| head.split(|c: char| c.is_whitespace() || c == '/' || c == '>').next())
+                    .filter(|name| !name.is_empty())
+                    .ok_or_else(|| conflict("invalid parent qualified name"))?;
+                let position = parent.range().start + opening_end;
+                self_closing.insert(position, qualified_name.to_owned());
+                position
+            } else {
+                let closing = format!("</{}", parent.tag_name().name());
+                let relative = raw.rfind(&closing).ok_or_else(|| conflict("parent closing tag missing"))?;
+                parent.range().start + relative
+            }
         };
         insertions.entry(position).or_default().push((source.path.clone(), xml));
     }
@@ -128,8 +138,17 @@ pub fn restore_elements(
     for (position, mut fragments) in positions.into_iter().rev() {
         fragments.sort_by(|a, b| a.0.cmp(&b.0));
         let combined: String = fragments.into_iter().map(|(_, xml)| xml).collect();
-        element_shifts.push((position, combined.len()));
-        output.insert_str(position, &combined);
+        if let Some(qualified_name) = self_closing.get(&position) {
+            let replacement = format!(">{combined}</{qualified_name}");
+            if !output[position..].starts_with("/>") {
+                return Err(conflict("self-closing parent changed"));
+            }
+            element_shifts.push((position, replacement.len() - 1));
+            output.replace_range(position..position + 1, &replacement);
+        } else {
+            element_shifts.push((position, combined.len()));
+            output.insert_str(position, &combined);
+        }
     }
     // Insert unqualified attributes at their keyed element's start tag.
     // XML escaping is explicit and no existing attribute may be overwritten.

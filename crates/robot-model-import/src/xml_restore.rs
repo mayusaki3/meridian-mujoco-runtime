@@ -257,15 +257,15 @@ fn valid_xml_name(name: &str) -> bool {
 }
 fn escape_attribute(value: &str) -> String {
     value.replace('&', "&amp;").replace('<', "&lt;")
-        .replace('"', "&quot;").replace('\\r', "&#13;")
-        .replace('\\n', "&#10;").replace('\\t', "&#9;")
+        .replace('"', "&quot;").replace('\r', "&#13;")
+        .replace('\n', "&#10;").replace('\t', "&#9;")
 }
 fn opening_tag_end(raw: &str) -> Option<usize> {
     let mut quote = None;
     for (index, c) in raw.char_indices() {
         if let Some(q) = quote {
             if c == q { quote = None; }
-        } else if c == '\\'' || c == '"' { quote = Some(c); }
+        } else if c == '\'' || c == '"' { quote = Some(c); }
         else if c == '>' {
             let mut pos = index;
             while pos > 0 && raw.as_bytes()[pos - 1].is_ascii_whitespace() { pos -= 1; }

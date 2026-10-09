@@ -50,6 +50,37 @@ pub fn restore_elements(
     if nodes.len() != doc.descendants().filter(|n| n.is_element()).count() {
         return Err(conflict("edited graph element count mismatch"));
     }
+    // Verify that graph identity, structural anchors and owner assignments
+    // describe the actual edited XML, not just matching element names.
+    let by_key: HashMap<_, _> = edited.elements.iter().map(|e| (e.key, e)).collect();
+    for element in &edited.elements {
+        let node = nodes[&element.key];
+        if let Some(parent_key) = element.parent_key {
+            let parent = nodes.get(&parent_key).ok_or_else(|| conflict("edited parent missing"))?;
+            if node.parent().filter(|n| n.is_element()) != Some(*parent) {
+                return Err(conflict("edited parent relationship mismatch"));
+            }
+            let parent_element = by_key[&parent_key];
+            let expected_owner = if element.namespace_uri.is_none() && element.local_name == "link" {
+                element.owner.clone()
+            } else if element.namespace_uri.is_none() && element.local_name == "joint" {
+                element.owner.clone()
+            } else {
+                parent_element.owner.clone()
+            };
+            if element.owner != expected_owner {
+                return Err(conflict("edited owner relationship mismatch"));
+            }
+        }
+        let actual_previous = node.prev_siblings().filter(|n| n.is_element()).nth(1);
+        let actual_next = node.next_siblings().filter(|n| n.is_element()).nth(1);
+        if actual_previous.map(|n| n.range().start) != element.previous_sibling_key
+            .and_then(|k| nodes.get(&k).map(|n| n.range().start))
+            || actual_next.map(|n| n.range().start) != element.next_sibling_key
+                .and_then(|k| nodes.get(&k).map(|n| n.range().start)) {
+            return Err(conflict("edited sibling anchors mismatch"));
+        }
+    }
     let old: HashMap<_, _> = original.elements.iter().map(|e| (e.key, e)).collect();
     let preserved: HashSet<_> = snapshot.items.iter().map(|i| i.source_key).collect();
     let mut insertions: HashMap<usize, Vec<(Vec<usize>, &str)>> = HashMap::new();
@@ -248,8 +279,8 @@ mod tests {
         let (snapshot, original, mut edited, xml) = fixture();
         let visual = edited.elements.iter().position(|e| e.local_name == "visual").unwrap();
         let collision = edited.elements.iter().position(|e| e.local_name == "collision").unwrap();
-        edited.elements[visual].path[2] = 1;
-        edited.elements[collision].path[2] = 0;
+        *edited.elements[visual].path.last_mut().unwrap() = 1;
+        *edited.elements[collision].path.last_mut().unwrap() = 0;
         let visual_key = edited.elements[visual].key;
         let collision_key = edited.elements[collision].key;
         edited.elements[visual].previous_sibling_key = Some(collision_key);

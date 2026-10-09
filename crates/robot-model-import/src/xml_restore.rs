@@ -406,14 +406,44 @@ mod tests {
         assert!(output.contains(r#"vendor="a&amp;b&quot;c""#));
     }
 
-    #[test]
-    fn rejects_namespaced_attribute_until_prefix_reconciliation() {
+    fn namespace_fixture() -> (PlacementSnapshot, SourceElementGraph, SourceMappingDocument) {
         let source = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" v:flag="yes"/></robot>"#;
-        let edited_xml = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a"/></robot>"#;
         let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
-        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
-        assert!(restore_elements(edited_xml, &snapshot, &original, &original).is_err());
+        let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
+        (snapshot, graph, mapping)
+    }
+
+    #[test]
+    fn restores_namespaced_attribute_using_same_uri_and_new_prefix() {
+        let (snapshot, graph, _) = namespace_fixture();
+        let edited_xml = r#"<robot name="r" xmlns:ext="urn:vendor"><link name="a"/></robot>"#;
+        let output = restore_elements(edited_xml, &snapshot, &graph, &graph).unwrap();
+        assert!(output.contains(r#"ext:flag="yes""#));
+        let doc = Document::parse(&output).unwrap();
+        let link = doc.descendants().find(|n| n.has_tag_name("link")).unwrap();
+        assert_eq!(link.attribute(("urn:vendor", "flag")), Some("yes"));
+    }
+
+    #[test]
+    fn rejects_namespaced_attribute_without_matching_prefix() {
+        let (snapshot, graph, _) = namespace_fixture();
+        let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
+        assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
+    }
+
+    #[test]
+    fn rejects_namespaced_attribute_with_wrong_uri() {
+        let (snapshot, graph, _) = namespace_fixture();
+        let edited_xml = r#"<robot name="r" xmlns:v="urn:other"><link name="a"/></robot>"#;
+        assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
+    }
+
+    #[test]
+    fn rejects_namespaced_attribute_collision() {
+        let (snapshot, graph, _) = namespace_fixture();
+        let edited_xml = r#"<robot name="r" xmlns:ext="urn:vendor"><link name="a" ext:flag="other"/></robot>"#;
+        assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
     }
 
 }

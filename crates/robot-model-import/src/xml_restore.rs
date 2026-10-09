@@ -446,4 +446,43 @@ mod tests {
         assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
     }
 
+    #[test]
+    fn restores_multiple_attributes_on_one_self_closing_element() {
+        let source = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" first="one" second="two" v:flag="yes"/></robot>"#;
+        let edited_xml = r#"<robot name="r" xmlns:ext="urn:vendor"><link name="a"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
+        let output = restore_elements(edited_xml, &snapshot, &graph, &graph).unwrap();
+        let doc = Document::parse(&output).unwrap();
+        let link = doc.descendants().find(|n| n.has_tag_name("link")).unwrap();
+        assert_eq!(link.attribute("first"), Some("one"));
+        assert_eq!(link.attribute("second"), Some("two"));
+        assert_eq!(link.attribute(("urn:vendor", "flag")), Some("yes"));
+    }
+
+    #[test]
+    fn resolves_shadowed_prefix_at_target_element() {
+        let source = r#"<robot name="r" xmlns:v="urn:outer"><link name="a" xmlns:v="urn:inner" v:flag="yes"/></robot>"#;
+        let edited_xml = r#"<robot name="r" xmlns:v="urn:outer"><link name="a" xmlns:v="urn:inner"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
+        let output = restore_elements(edited_xml, &snapshot, &graph, &graph).unwrap();
+        let doc = Document::parse(&output).unwrap();
+        let link = doc.descendants().find(|n| n.has_tag_name("link")).unwrap();
+        assert_eq!(link.attribute(("urn:inner", "flag")), Some("yes"));
+        assert_eq!(link.attribute(("urn:outer", "flag")), None);
+    }
+
+    #[test]
+    fn rejects_shadowed_prefix_with_no_in_scope_uri_binding() {
+        let source = r#"<robot name="r" xmlns:v="urn:outer"><link name="a" xmlns:v="urn:inner" v:flag="yes"/></robot>"#;
+        let edited_xml = r#"<robot name="r" xmlns:v="urn:inner"><link name="a" xmlns:v="urn:other"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
+        assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
+    }
+
 }

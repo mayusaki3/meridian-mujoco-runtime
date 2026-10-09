@@ -603,4 +603,37 @@ mod tests {
         assert!(restore_elements(edited_xml, &snapshot, &original, &edited).is_err());
     }
 
+    #[test]
+    fn restores_child_into_self_closing_parent_with_attributes() {
+        let source = r#"<robot name="r"><link name="a" note="keep"><vendor/></link></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a" note="keep"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "vendor");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        let doc = Document::parse(&output).unwrap();
+        let link = doc.descendants().find(|n| n.has_tag_name("link")).unwrap();
+        assert_eq!(link.attribute("note"), Some("keep"));
+        assert_eq!(link.children().filter(|n| n.is_element()).count(), 1);
+        assert!(output.contains("<vendor/>"));
+    }
+
+    #[test]
+    fn restores_child_and_attribute_into_self_closing_parent() {
+        let source = r#"<robot name="r"><link name="a" custom="value"><vendor/></link></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "vendor");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        let doc = Document::parse(&output).unwrap();
+        let link = doc.descendants().find(|n| n.has_tag_name("link")).unwrap();
+        assert_eq!(link.attribute("custom"), Some("value"));
+        assert_eq!(link.children().filter(|n| n.is_element()).count(), 1);
+    }
+
 }

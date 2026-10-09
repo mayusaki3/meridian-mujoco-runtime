@@ -606,7 +606,7 @@ mod tests {
     #[test]
     fn restores_child_into_self_closing_parent_with_attributes() {
         let source = r#"<robot name="r"><link name="a" note="keep"><vendor/></link></robot>"#;
-        let edited_xml = r#"<robot name="r"><link name="a" note="keep"/></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
         let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
         let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();

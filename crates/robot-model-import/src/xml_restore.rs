@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unsupported_preserved_attributes() {
+    fn rejects_existing_preserved_attribute_collision() {
         let xml = r#"<robot name="r" vendor="x"/>"#;
         let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(xml, &mapping).unwrap();
@@ -382,6 +382,28 @@ mod tests {
         let (snapshot, original, edited, xml) = fixture();
         let xml = xml.replace("<collision/>", "<vendor_a/><collision/>");
         assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
+    }
+
+    #[test]
+    fn restores_unqualified_attribute_with_xml_escaping() {
+        let source = r#"<robot name="r"><link name="a" vendor="a&amp;b&quot;c"/></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let edited = original.clone();
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        assert!(output.contains(r#"vendor="a&amp;b&quot;c""#));
+    }
+
+    #[test]
+    fn rejects_namespaced_attribute_until_prefix_reconciliation() {
+        let source = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" v:flag="yes"/></robot>"#;
+        let edited_xml = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        assert!(restore_elements(edited_xml, &snapshot, &original, &original).is_err());
     }
 
 }

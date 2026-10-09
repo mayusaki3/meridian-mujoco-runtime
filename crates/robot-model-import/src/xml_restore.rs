@@ -124,7 +124,11 @@ pub fn restore_elements(
                 self_closing.insert(position, qualified_name.to_owned());
                 position
             } else {
-                let closing = format!("</{}", parent.tag_name().name());
+                let qualified_name = raw.strip_prefix('<')
+                    .and_then(|head| head.split(|c: char| c.is_whitespace() || c == '/' || c == '>').next())
+                    .filter(|name| !name.is_empty())
+                    .ok_or_else(|| conflict("invalid parent qualified name"))?;
+                let closing = format!("</{qualified_name}>");
                 let relative = raw.rfind(&closing).ok_or_else(|| conflict("parent closing tag missing"))?;
                 parent.range().start + relative
             }
@@ -677,6 +681,32 @@ mod tests {
         edited.elements.retain(|e| e.local_name != "vendor");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
         assert_eq!(output, "<robot name=\"r\">\n  <!-- before -->\n  <link name='a' ><vendor/></link>\n  <!-- after -->\n</robot>");
+    }
+
+    #[test]
+    fn restores_unknown_child_before_existing_parent_closing_tag() {
+        let source = r#"<robot name="r"><link name="a"><vendor/></link></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"></link></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "vendor");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        assert_eq!(output, source);
+    }
+
+    #[test]
+    fn restores_unknown_child_before_prefixed_parent_closing_tag() {
+        let source = r#"<robot name="r" xmlns:v="urn:vendor"><v:container><v:extension/></v:container></robot>"#;
+        let edited_xml = r#"<robot name="r" xmlns:v="urn:vendor"><v:container></v:container></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "extension");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        assert_eq!(output, source);
     }
 
 }

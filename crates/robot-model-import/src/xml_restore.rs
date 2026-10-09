@@ -11,6 +11,14 @@ fn conflict(message: &str) -> PlacementError {
     PlacementError::Conflict(message.into())
 }
 
+fn shifted_start(original: usize, patches: &[(usize, usize)]) -> usize {
+    original + patches.iter().filter(|(at, _)| *at <= original).map(|(_, len)| len).sum::<usize>()
+}
+
+fn node_at_start<'a, 'input>(root: Node<'a, 'input>, start: usize) -> Option<Node<'a, 'input>> {
+    root.descendants().find(|n| n.is_element() && n.range().start == start)
+}
+
 fn node_at<'a, 'input>(root: Node<'a, 'input>, path: &[usize]) -> Option<Node<'a, 'input>> {
     let mut node = root;
     for index in path {
@@ -116,9 +124,11 @@ pub fn restore_elements(
     let mut positions: Vec<_> = insertions.into_iter().collect();
     positions.sort_by_key(|(position, _)| *position);
     let mut output = edited_xml.to_owned();
+    let mut element_shifts: Vec<(usize, usize)> = Vec::new();
     for (position, mut fragments) in positions.into_iter().rev() {
         fragments.sort_by(|a, b| a.0.cmp(&b.0));
         let combined: String = fragments.into_iter().map(|(_, xml)| xml).collect();
+        element_shifts.push((position, combined.len()));
         output.insert_str(position, &combined);
     }
     // Insert unqualified attributes at their keyed element's start tag.
@@ -135,8 +145,16 @@ pub fn restore_elements(
             let parent_key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent key absent"))?;
             let parent_graph = edited.elements.iter().find(|e| e.key == parent_key)
                 .ok_or_else(|| conflict("attribute parent missing"))?;
-            let node = node_at(intermediate.root_element(), &parent_graph.path)
-                .ok_or_else(|| conflict("attribute parent path missing"))?;
+            let original_start = nodes.get(&parent_key)
+                .ok_or_else(|| conflict("attribute parent key missing"))?.range().start;
+            let node = node_at_start(intermediate.root_element(),
+                shifted_start(original_start, &element_shifts))
+                .ok_or_else(|| conflict("attribute parent identity missing"))?;
+            if node.tag_name().name() != parent_graph.local_name
+                || node.tag_name().namespace() != parent_graph.namespace_uri.as_deref()
+                || node.attribute("name") != parent_graph.name_attribute.as_deref() {
+                return Err(conflict("attribute parent identity changed"));
+            }
             if !valid_xml_name(local_name) { return Err(conflict("invalid attribute name")); }
             let qualified = if let Some(uri) = namespace_uri {
                 if node.attribute((uri.as_str(), local_name.as_str())).is_some() {
@@ -160,6 +178,8 @@ pub fn restore_elements(
             attr_patches.push((insertion, format!(" {qualified}=\"{escaped}\"")));
         }
     }
+    let attribute_shifts: Vec<(usize, usize)> = attr_patches.iter()
+        .map(|(position, fragment)| (*position, fragment.len())).collect();
     attr_patches.sort_by_key(|(position, _)| *position);
     for (position, fragment) in attr_patches.into_iter().rev() {
         output.insert_str(position, &fragment);
@@ -188,9 +208,10 @@ pub fn restore_elements(
     for (parent_key, mut entries) in expected {
         entries.sort_by_key(|(index, _)| *index);
         let parent = nodes.get(&parent_key).ok_or_else(|| conflict("edited parent absent"))?;
-        let output_parent = node_at(result_root, &edited.elements.iter()
-            .find(|e| e.key == parent_key)
-            .ok_or_else(|| conflict("parent graph key absent"))?.path)
+        let parent_start = nodes.get(&parent_key)
+            .ok_or_else(|| conflict("parent graph key absent"))?.range().start;
+        let output_parent = node_at_start(result_root,
+            shifted_start(shifted_start(parent_start, &element_shifts), &attribute_shifts))
             .ok_or_else(|| conflict("output parent absent"))?;
         if output_parent.tag_name() != parent.tag_name() {
             return Err(conflict("output parent changed"));
@@ -247,7 +268,16 @@ pub fn restore_elements(
         let key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent absent"))?;
         let parent = edited.elements.iter().find(|e| e.key == key)
             .ok_or_else(|| conflict("attribute parent graph absent"))?;
-        let node = node_at(result_root, &parent.path).ok_or_else(|| conflict("attribute output parent absent"))?;
+        let original_start = nodes.get(&key)
+            .ok_or_else(|| conflict("attribute output parent key absent"))?.range().start;
+        let node = node_at_start(result_root,
+            shifted_start(shifted_start(original_start, &element_shifts), &attribute_shifts))
+            .ok_or_else(|| conflict("attribute output parent absent"))?;
+        if node.tag_name().name() != parent.local_name
+            || node.tag_name().namespace() != parent.namespace_uri.as_deref()
+            || node.attribute("name") != parent.name_attribute.as_deref() {
+            return Err(conflict("attribute output parent identity changed"));
+        }
         let observed = match namespace_uri {
             Some(uri) => node.attribute((uri.as_str(), local_name.as_str())),
             None => node.attribute(local_name.as_str()),

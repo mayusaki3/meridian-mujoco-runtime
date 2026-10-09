@@ -636,4 +636,47 @@ mod tests {
         assert_eq!(link.children().filter(|n| n.is_element()).count(), 1);
     }
 
+    #[test]
+    fn restores_namespaced_child_into_self_closing_parent_preserving_prefix() {
+        let source = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a"><v:extension/></link></robot>"#;
+        let edited_xml = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" /></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "extension");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        assert!(output.contains("<link name=\"a\" ><v:extension/></link>"));
+        let doc = Document::parse(&output).unwrap();
+        assert_eq!(doc.descendants().filter(|n| n.tag_name().namespace() == Some("urn:vendor")).count(), 1);
+    }
+
+    #[test]
+    fn restores_children_into_two_self_closing_parents() {
+        let source = r#"<robot name="r"><link name="a"><vendor_a/></link><link name="b"><vendor_b/></link></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"/><link name="b"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "vendor_a" && e.local_name != "vendor_b");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        assert!(output.contains("<link name=\"a\"><vendor_a/></link>"));
+        assert!(output.contains("<link name=\"b\"><vendor_b/></link>"));
+        assert_eq!(Document::parse(&output).unwrap().descendants().filter(|n| n.is_element()).count(), 5);
+    }
+
+    #[test]
+    fn preserves_comments_and_whitespace_around_self_closing_expansion() {
+        let source = "<robot name=\"r\">\n  <!-- before -->\n  <link name='a'><vendor/></link>\n  <!-- after -->\n</robot>";
+        let edited_xml = "<robot name=\"r\">\n  <!-- before -->\n  <link name='a' />\n  <!-- after -->\n</robot>";
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "vendor");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        assert_eq!(output, "<robot name=\"r\">\n  <!-- before -->\n  <link name='a' ><vendor/></link>\n  <!-- after -->\n</robot>");
+    }
+
 }

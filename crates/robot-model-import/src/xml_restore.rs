@@ -218,4 +218,66 @@ mod tests {
         let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &original).unwrap();
         assert!(restore_elements(xml, &snapshot, &original, &original).is_err());
     }
+    #[test]
+    fn rejects_changed_owner_identity() {
+        let (snapshot, original, mut edited, xml) = fixture();
+        let link = edited.elements.iter().find(|e| e.local_name == "link").unwrap().owner.clone();
+        let collision = edited.elements.iter_mut().find(|e| e.local_name == "collision").unwrap();
+        assert!(matches!(link, crate::source_mapping::SourceOwner::Link(_)));
+        collision.owner = crate::source_mapping::SourceOwner::Robot(edited_dummy_robot_id(&original));
+        assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
+    }
+
+    fn edited_dummy_robot_id(graph: &SourceElementGraph) -> crate::source_mapping::RobotId {
+        match graph.elements[0].owner {
+            crate::source_mapping::SourceOwner::Robot(id) => id,
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn rejects_changed_parent_key() {
+        let (snapshot, original, mut edited, xml) = fixture();
+        let root_key = edited.elements[0].key;
+        edited.elements.iter_mut().find(|e| e.local_name == "collision").unwrap().parent_key = Some(root_key);
+        assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
+    }
+
+    #[test]
+    fn rejects_reordered_surviving_siblings() {
+        let (snapshot, original, mut edited, xml) = fixture();
+        let visual = edited.elements.iter().position(|e| e.local_name == "visual").unwrap();
+        let collision = edited.elements.iter().position(|e| e.local_name == "collision").unwrap();
+        edited.elements[visual].path[2] = 1;
+        edited.elements[collision].path[2] = 0;
+        let visual_key = edited.elements[visual].key;
+        let collision_key = edited.elements[collision].key;
+        edited.elements[visual].previous_sibling_key = Some(collision_key);
+        edited.elements[visual].next_sibling_key = None;
+        edited.elements[collision].previous_sibling_key = None;
+        edited.elements[collision].next_sibling_key = Some(visual_key);
+        assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_preserved_item() {
+        let (mut snapshot, original, edited, xml) = fixture();
+        snapshot.items.push(snapshot.items[0].clone());
+        assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_preserved_item_in_group() {
+        let (mut snapshot, original, edited, xml) = fixture();
+        snapshot.items.pop();
+        assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_fragment_already_in_edited_xml() {
+        let (snapshot, original, edited, xml) = fixture();
+        let xml = xml.replace("<collision/>", "<vendor_a/><collision/>");
+        assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
+    }
+
 }

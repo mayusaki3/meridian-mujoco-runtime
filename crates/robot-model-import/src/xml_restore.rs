@@ -697,7 +697,7 @@ mod tests {
     }
 
     #[test]
-    fn restores_unknown_child_before_prefixed_parent_closing_tag() {
+    fn rejects_partial_edit_inside_preserved_namespaced_parent() {
         let source = r#"<robot name="r" xmlns:v="urn:vendor"><v:container><v:extension/></v:container></robot>"#;
         let edited_xml = r#"<robot name="r" xmlns:v="urn:vendor"><v:container></v:container></robot>"#;
         let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
@@ -705,8 +705,10 @@ mod tests {
         let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "extension");
-        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
-        assert_eq!(output, source);
+        assert!(matches!(
+            restore_elements(edited_xml, &snapshot, &original, &edited),
+            Err(PlacementError::Conflict(_))
+        ));
     }
 
 }

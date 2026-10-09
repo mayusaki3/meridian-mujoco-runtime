@@ -1,3 +1,5 @@
+mod urdf_io;
+
 fn main() {
     workflow_ide_framework::Application::new(
         "meridian-mujoco-runtime",

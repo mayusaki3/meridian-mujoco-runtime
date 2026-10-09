@@ -104,3 +104,51 @@ pub fn restore_elements(
     }
     Ok(output)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{inspect_urdf, source_mapping::SourceMappingDocument};
+
+    fn fixture() -> (PlacementSnapshot, SourceElementGraph, SourceElementGraph, String) {
+        let source = r#"<robot name="r"><link name="a"><visual/><vendor_a/><vendor_b/><collision/></link></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"><visual/><collision/></link></robot>"#.to_owned();
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        let preserved: HashSet<_> = snapshot.items.iter().map(|i| i.source_key).collect();
+        edited.elements.retain(|e| !preserved.contains(&e.key));
+        let visual = edited.elements.iter().position(|e| e.local_name == "visual").unwrap();
+        let collision = edited.elements.iter().position(|e| e.local_name == "collision").unwrap();
+        let left = edited.elements[visual].key;
+        let right = edited.elements[collision].key;
+        edited.elements[visual].next_sibling_key = Some(right);
+        edited.elements[collision].previous_sibling_key = Some(left);
+        *edited.elements[collision].path.last_mut().unwrap() = 1;
+        (snapshot, original, edited, edited_xml)
+    }
+
+    #[test]
+    fn restores_consecutive_unknown_elements_without_reordering() {
+        let (snapshot, original, edited, xml) = fixture();
+        let output = restore_elements(&xml, &snapshot, &original, &edited).unwrap();
+        assert!(output.contains("<visual/><vendor_a/><vendor_b/><collision/>"));
+    }
+
+    #[test]
+    fn rejects_xml_that_does_not_match_edited_graph() {
+        let (snapshot, original, edited, xml) = fixture();
+        let changed = xml.replace("<collision/>", "<inertial/>");
+        assert!(restore_elements(&changed, &snapshot, &original, &edited).is_err());
+    }
+
+    #[test]
+    fn rejects_unsupported_preserved_attributes() {
+        let xml = r#"<robot name="r" vendor="x"/>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(xml, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &original).unwrap();
+        assert!(restore_elements(xml, &snapshot, &original, &original).is_err());
+    }
+}

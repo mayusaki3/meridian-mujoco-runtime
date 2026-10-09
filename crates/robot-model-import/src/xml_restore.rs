@@ -208,13 +208,21 @@ pub fn restore_elements(
         output.insert_str(position, &fragment);
     }
     let result = Document::parse(&output).map_err(|_| conflict("restored XML invalid"))?;
-    // Verify every preserved fragment occurs exactly once as an element's
-    // original serialized subtree; no silent loss or duplication.
+    // Identical preserved subtrees may legitimately occur more than once.
+    // Compare their observed multiplicity against the snapshot rather than
+    // requiring every serialized fragment to be globally unique.
+    let mut expected_fragments: HashMap<&str, usize> = HashMap::new();
     for item in &snapshot.items {
-        let PreservedPayload::Element { xml } = &item.payload else { continue };
-        let count = result.descendants().filter(|n| n.is_element())
+        if let PreservedPayload::Element { xml } = &item.payload {
+            *expected_fragments.entry(xml.as_str()).or_default() += 1;
+        }
+    }
+    for (xml, expected_count) in expected_fragments {
+        let actual_count = result.descendants().filter(|n| n.is_element())
             .filter(|n| &output[n.range()] == xml).count();
-        if count != 1 { return Err(conflict("restored fragment missing or duplicated")); }
+        if actual_count != expected_count {
+            return Err(conflict("restored fragment missing or duplicated"));
+        }
     }
     // Verify placement against the edited graph after reparsing. Each
     // preserved subtree must occupy the expected child slot and retain its
@@ -710,5 +718,19 @@ mod tests {
             Err(PlacementError::Conflict(_))
         ));
     }
+
+    #[test]
+    fn restores_identical_unknown_siblings_without_false_duplicate_conflict() {
+        let source = r#"<robot name="r"><link name="a"><vendor/><vendor/></link></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "vendor");
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        assert_eq!(output, source);
+    }
+
 
 }

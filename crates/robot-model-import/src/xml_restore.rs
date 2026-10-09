@@ -151,7 +151,7 @@ pub fn restore_elements(
             let opening_end = opening_tag_end(head).ok_or_else(|| conflict("invalid start tag"))?;
             let insertion = node.range().start + opening_end;
             let escaped = escape_attribute(value);
-            attr_patches.push((insertion, format!(" {local_name}=\\\"{escaped}\\\"")));
+            attr_patches.push((insertion, format!(" {local_name}=\"{escaped}\"")));
         }
     }
     attr_patches.sort_by_key(|(position, _)| *position);

@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 workflow-ide-framework = { git = "https://github.com/mayusaki3/workflow-ide-framework", branch = "develop" }
+robot-model-import = { path = "crates/robot-model-import" }

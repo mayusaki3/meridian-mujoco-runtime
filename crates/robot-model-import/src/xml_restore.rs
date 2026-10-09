@@ -1,5 +1,5 @@
-//! Fail-closed element-only XML restoration. Attributes and self-closing
-//! insertion parents are intentionally unsupported until lossless handling exists.
+//! Fail-closed XML restoration. Element insertion into self-closing
+//! parents remains unsupported until lossless handling exists.
 use crate::placement::{PlacementError, PlacementSnapshot, PreservedPayload};
 use crate::relocation::{plan_relocation, validate_relocation_plan};
 use crate::source_element_graph::SourceElementGraph;
@@ -30,12 +30,6 @@ pub fn restore_elements(
 ) -> Result<String, PlacementError> {
     let plan = plan_relocation(snapshot, original, edited)?;
     validate_relocation_plan(snapshot, edited, &plan)?;
-    // Attributes are restored separately after element insertion. Namespaced
-    // attributes remain fail-closed until prefix identity can be verified.
-    if snapshot.items.iter().any(|i| matches!(&i.payload,
-        PreservedPayload::Attribute { namespace_uri: Some(_), .. })) {
-        return Err(conflict("namespaced attribute restoration not supported"));
-    }
     let doc = Document::parse(edited_xml).map_err(|_| conflict("invalid edited XML"))?;
     let root = doc.root_element();
     if root.tag_name().name() != "robot" || root.tag_name().namespace().is_some() {
@@ -134,8 +128,8 @@ pub fn restore_elements(
         let intermediate = Document::parse(&output).map_err(|_| conflict("restored XML invalid"))?;
         let mut used = HashSet::new();
         for item in &snapshot.items {
-            let PreservedPayload::Attribute { local_name, namespace_uri: None, value } = &item.payload else { continue };
-            if !used.insert((item.placement.parent_key, local_name.as_str())) {
+            let PreservedPayload::Attribute { local_name, namespace_uri, value } = &item.payload else { continue };
+            if !used.insert((item.placement.parent_key, namespace_uri.as_deref(), local_name.as_str())) {
                 return Err(conflict("duplicate preserved attribute"));
             }
             let parent_key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent key absent"))?;
@@ -143,15 +137,27 @@ pub fn restore_elements(
                 .ok_or_else(|| conflict("attribute parent missing"))?;
             let node = node_at(intermediate.root_element(), &parent_graph.path)
                 .ok_or_else(|| conflict("attribute parent path missing"))?;
-            if node.attribute(local_name.as_str()).is_some() {
-                return Err(conflict("attribute already exists"));
-            }
             if !valid_xml_name(local_name) { return Err(conflict("invalid attribute name")); }
+            let qualified = if let Some(uri) = namespace_uri {
+                if node.attribute((uri.as_str(), local_name.as_str())).is_some() {
+                    return Err(conflict("namespaced attribute already exists"));
+                }
+                let prefix = node.namespaces().find(|ns| ns.uri() == uri && ns.name()
+                    .is_some_and(|p| valid_xml_name(p)))
+                    .and_then(|ns| ns.name())
+                    .ok_or_else(|| conflict("namespace prefix unavailable"))?;
+                format!("{prefix}:{local_name}")
+            } else {
+                if node.attribute(local_name.as_str()).is_some() {
+                    return Err(conflict("attribute already exists"));
+                }
+                local_name.clone()
+            };
             let head = &output[node.range()];
             let opening_end = opening_tag_end(head).ok_or_else(|| conflict("invalid start tag"))?;
             let insertion = node.range().start + opening_end;
             let escaped = escape_attribute(value);
-            attr_patches.push((insertion, format!(" {local_name}=\"{escaped}\"")));
+            attr_patches.push((insertion, format!(" {qualified}=\"{escaped}\"")));
         }
     }
     attr_patches.sort_by_key(|(position, _)| *position);
@@ -237,12 +243,16 @@ pub fn restore_elements(
     }
     // Attribute value and owner verification after reparsing.
     for item in &snapshot.items {
-        let PreservedPayload::Attribute { local_name, namespace_uri: None, value } = &item.payload else { continue };
+        let PreservedPayload::Attribute { local_name, namespace_uri, value } = &item.payload else { continue };
         let key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent absent"))?;
         let parent = edited.elements.iter().find(|e| e.key == key)
             .ok_or_else(|| conflict("attribute parent graph absent"))?;
         let node = node_at(result_root, &parent.path).ok_or_else(|| conflict("attribute output parent absent"))?;
-        if node.attribute(local_name.as_str()) != Some(value.as_str()) || item.owner != parent.owner {
+        let observed = match namespace_uri {
+            Some(uri) => node.attribute((uri.as_str(), local_name.as_str())),
+            None => node.attribute(local_name.as_str()),
+        };
+        if observed != Some(value.as_str()) || item.owner != parent.owner {
             return Err(conflict("restored attribute value or owner mismatch"));
         }
     }

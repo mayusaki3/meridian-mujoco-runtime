@@ -30,8 +30,11 @@ pub fn restore_elements(
 ) -> Result<String, PlacementError> {
     let plan = plan_relocation(snapshot, original, edited)?;
     validate_relocation_plan(snapshot, edited, &plan)?;
-    if snapshot.items.iter().any(|i| !matches!(i.payload, PreservedPayload::Element { .. })) {
-        return Err(conflict("attribute restoration not supported"));
+    // Attributes are restored separately after element insertion. Namespaced
+    // attributes remain fail-closed until prefix identity can be verified.
+    if snapshot.items.iter().any(|i| matches!(&i.payload,
+        PreservedPayload::Attribute { namespace_uri: Some(_), .. })) {
+        return Err(conflict("namespaced attribute restoration not supported"));
     }
     let doc = Document::parse(edited_xml).map_err(|_| conflict("invalid edited XML"))?;
     let root = doc.root_element();
@@ -88,7 +91,7 @@ pub fn restore_elements(
         let item = snapshot.items.iter().find(|i| i.source_key == entry.source_key)
             .ok_or_else(|| conflict("preserved item missing"))?;
         let PreservedPayload::Element { xml } = &item.payload else {
-            return Err(conflict("non-element payload"));
+            continue;
         };
         let source = old.get(&entry.source_key).ok_or_else(|| conflict("source element missing"))?;
         // Walk right through a consecutive preserved run. The insertion point
@@ -124,11 +127,42 @@ pub fn restore_elements(
         let combined: String = fragments.into_iter().map(|(_, xml)| xml).collect();
         output.insert_str(position, &combined);
     }
+    // Insert unqualified attributes at their keyed element's start tag.
+    // XML escaping is explicit and no existing attribute may be overwritten.
+    let mut attr_patches: Vec<(usize, String)> = Vec::new();
+    {
+        let intermediate = Document::parse(&output).map_err(|_| conflict("restored XML invalid"))?;
+        let mut used = HashSet::new();
+        for item in &snapshot.items {
+            let PreservedPayload::Attribute { local_name, namespace_uri: None, value } = &item.payload else { continue };
+            if !used.insert((item.placement.parent_key, local_name.as_str())) {
+                return Err(conflict("duplicate preserved attribute"));
+            }
+            let parent_key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent key absent"))?;
+            let parent_graph = edited.elements.iter().find(|e| e.key == parent_key)
+                .ok_or_else(|| conflict("attribute parent missing"))?;
+            let node = node_at(intermediate.root_element(), &parent_graph.path)
+                .ok_or_else(|| conflict("attribute parent path missing"))?;
+            if node.attribute(local_name.as_str()).is_some() {
+                return Err(conflict("attribute already exists"));
+            }
+            if !valid_xml_name(local_name) { return Err(conflict("invalid attribute name")); }
+            let head = &output[node.range()];
+            let opening_end = opening_tag_end(head).ok_or_else(|| conflict("invalid start tag"))?;
+            let insertion = node.range().start + opening_end;
+            let escaped = escape_attribute(value);
+            attr_patches.push((insertion, format!(" {local_name}=\\\"{escaped}\\\"")));
+        }
+    }
+    attr_patches.sort_by_key(|(position, _)| *position);
+    for (position, fragment) in attr_patches.into_iter().rev() {
+        output.insert_str(position, &fragment);
+    }
     let result = Document::parse(&output).map_err(|_| conflict("restored XML invalid"))?;
     // Verify every preserved fragment occurs exactly once as an element's
     // original serialized subtree; no silent loss or duplication.
     for item in &snapshot.items {
-        let PreservedPayload::Element { xml } = &item.payload else { unreachable!() };
+        let PreservedPayload::Element { xml } = &item.payload else { continue };
         let count = result.descendants().filter(|n| n.is_element())
             .filter(|n| &output[n.range()] == xml).count();
         if count != 1 { return Err(conflict("restored fragment missing or duplicated")); }
@@ -139,6 +173,7 @@ pub fn restore_elements(
     let result_root = result.root_element();
     let mut expected: HashMap<Uuid, Vec<(usize, Uuid)>> = HashMap::new();
     for item in &snapshot.items {
+        if !matches!(item.payload, PreservedPayload::Element { .. }) { continue; }
         let element = old.get(&item.source_key).ok_or_else(|| conflict("source key absent"))?;
         let parent_key = element.parent_key.ok_or_else(|| conflict("source parent absent"))?;
         let sibling_index = element.path.last().copied().ok_or_else(|| conflict("source index absent"))?;
@@ -200,7 +235,45 @@ pub fn restore_elements(
             }
         }
     }
+    // Attribute value and owner verification after reparsing.
+    for item in &snapshot.items {
+        let PreservedPayload::Attribute { local_name, namespace_uri: None, value } = &item.payload else { continue };
+        let key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent absent"))?;
+        let parent = edited.elements.iter().find(|e| e.key == key)
+            .ok_or_else(|| conflict("attribute parent graph absent"))?;
+        let node = node_at(result_root, &parent.path).ok_or_else(|| conflict("attribute output parent absent"))?;
+        if node.attribute(local_name.as_str()) != Some(value.as_str()) || item.owner != parent.owner {
+            return Err(conflict("restored attribute value or owner mismatch"));
+        }
+    }
     Ok(output)
+}
+
+fn valid_xml_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+        && !name.to_ascii_lowercase().starts_with("xml")
+}
+fn escape_attribute(value: &str) -> String {
+    value.replace('&', "&amp;").replace('<', "&lt;")
+        .replace('"', "&quot;").replace('\\r', "&#13;")
+        .replace('\\n', "&#10;").replace('\\t', "&#9;")
+}
+fn opening_tag_end(raw: &str) -> Option<usize> {
+    let mut quote = None;
+    for (index, c) in raw.char_indices() {
+        if let Some(q) = quote {
+            if c == q { quote = None; }
+        } else if c == '\\'' || c == '"' { quote = Some(c); }
+        else if c == '>' {
+            let mut pos = index;
+            while pos > 0 && raw.as_bytes()[pos - 1].is_ascii_whitespace() { pos -= 1; }
+            if pos > 0 && raw.as_bytes()[pos - 1] == b'/' { pos -= 1; }
+            return Some(pos);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

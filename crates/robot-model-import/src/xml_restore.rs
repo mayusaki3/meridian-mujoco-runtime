@@ -102,6 +102,73 @@ pub fn restore_elements(
             .filter(|n| &output[n.range()] == xml).count();
         if count != 1 { return Err(conflict("restored fragment missing or duplicated")); }
     }
+    // Verify placement against the edited graph after reparsing. Each
+    // preserved subtree must occupy the expected child slot and retain its
+    // original owner. Checking only serialized fragments is insufficient.
+    let result_root = result.root_element();
+    let mut expected: HashMap<Uuid, Vec<(usize, Uuid)>> = HashMap::new();
+    for item in &snapshot.items {
+        let element = old.get(&item.source_key).ok_or_else(|| conflict("source key absent"))?;
+        let parent_key = element.parent_key.ok_or_else(|| conflict("source parent absent"))?;
+        let sibling_index = element.path.last().copied().ok_or_else(|| conflict("source index absent"))?;
+        expected.entry(parent_key).or_default().push((sibling_index, item.source_key));
+    }
+    for (parent_key, mut entries) in expected {
+        entries.sort_by_key(|(index, _)| *index);
+        let parent = nodes.get(&parent_key).ok_or_else(|| conflict("edited parent absent"))?;
+        let output_parent = node_at(result_root, &edited.elements.iter()
+            .find(|e| e.key == parent_key)
+            .ok_or_else(|| conflict("parent graph key absent"))?.path)
+            .ok_or_else(|| conflict("output parent absent"))?;
+        if output_parent.tag_name() != parent.tag_name() {
+            return Err(conflict("output parent changed"));
+        }
+        let saved_children: HashMap<_, _> = entries.iter().map(|(_, key)| {
+            let item = snapshot.items.iter().find(|i| i.source_key == *key).unwrap();
+            (*key, item)
+        }).collect();
+        let original_order: Vec<_> = original.elements.iter()
+            .filter(|e| e.parent_key == Some(parent_key))
+            .collect();
+        let mut original_order = original_order;
+        original_order.sort_by_key(|e| e.path.last().copied().unwrap_or(0));
+        let mut expected_keys: Vec<_> = original_order.iter()
+            .filter(|e| saved_children.contains_key(&e.key) || nodes.contains_key(&e.key))
+            .map(|e| e.key).collect();
+        // Newly added edited siblings are not represented in the original
+        // graph. Current planner only permits insertion between adjacent
+        // surviving anchors; reject rather than guessing their placement.
+        let edited_children: HashSet<_> = edited.elements.iter()
+            .filter(|e| e.parent_key == Some(parent_key))
+            .map(|e| e.key).collect();
+        if edited_children.iter().any(|key| !original_order.iter().any(|e| e.key == *key)) {
+            return Err(conflict("new siblings require explicit reconciliation"));
+        }
+        let actual_children: Vec<_> = output_parent.children().filter(|n| n.is_element()).collect();
+        if actual_children.len() != expected_keys.len() {
+            return Err(conflict("restored sibling count mismatch"));
+        }
+        for (index, key) in expected_keys.drain(..).enumerate() {
+            let child = actual_children[index];
+            if let Some(item) = saved_children.get(&key) {
+                let PreservedPayload::Element { xml } = &item.payload else { unreachable!() };
+                if &output[child.range()] != xml {
+                    return Err(conflict("restored sibling content or order mismatch"));
+                }
+                if item.owner != old[&key].owner || item.owner != edited.elements.iter()
+                    .find(|e| e.key == parent_key)
+                    .ok_or_else(|| conflict("edited owner absent"))?.owner {
+                    return Err(conflict("restored owner mismatch"));
+                }
+            } else {
+                let survivor = nodes.get(&key).ok_or_else(|| conflict("surviving sibling missing"))?;
+                if child.tag_name() != survivor.tag_name()
+                    || child.attribute("name") != survivor.attribute("name") {
+                    return Err(conflict("surviving sibling order mismatch"));
+                }
+            }
+        }
+    }
     Ok(output)
 }
 

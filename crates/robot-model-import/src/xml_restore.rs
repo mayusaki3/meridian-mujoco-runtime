@@ -515,4 +515,26 @@ mod tests {
         assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
     }
 
+    #[test]
+    fn restores_attribute_to_keyed_survivor_after_preceding_element_insertion() {
+        let source = r#"<robot name="r"><vendor/><link name="a" custom="correct"/></robot>"#;
+        let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
+        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let original = SourceElementGraph::from_source(source, &mapping).unwrap();
+        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut edited = original.clone();
+        edited.elements.retain(|e| e.local_name != "vendor");
+        let link = edited.elements.iter_mut().find(|e| e.local_name == "link").unwrap();
+        link.path = vec![0];
+        link.previous_sibling_key = None;
+        let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
+        let doc = Document::parse(&output).unwrap();
+        let children: Vec<_> = doc.root_element().children().filter(|n| n.is_element()).collect();
+        assert_eq!(children.len(), 2);
+        assert_eq!(children[0].tag_name().name(), "vendor");
+        assert_eq!(children[0].attribute("custom"), None);
+        assert_eq!(children[1].tag_name().name(), "link");
+        assert_eq!(children[1].attribute("custom"), Some("correct"));
+    }
+
 }

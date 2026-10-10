@@ -1,0 +1,1 @@
+<mujoco model="missing_tendon"><worldbody><body name="base"><geom type="sphere" size="0.1" mass="1"/></body></worldbody><actuator><motor name="m" tendon="unknown_tendon"/></actuator></mujoco>

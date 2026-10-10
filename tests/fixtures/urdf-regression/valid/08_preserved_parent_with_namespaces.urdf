@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<robot name="namespace_parent" xmlns:ext="urn:example:parent">
+  <link name="base"/>
+  <ext:assembly id="a"><ext:part id="1"/><ext:part id="1"/><ext:settings><ext:mode>safe</ext:mode></ext:settings></ext:assembly>
+</robot>

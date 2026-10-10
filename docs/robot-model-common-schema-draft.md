@@ -56,3 +56,9 @@ MJCF fixtures are committed as data first. Parser, validator, and MuJoCo engine 
 - Merge and reimport reconciliation are **out of scope for the first version**. Merge identity remapping, revision provenance, and collision policy must be designed before implementing merge.
 - After a ROBOT-Model is prepared, the user will select/extract a SysId model from it. The SysId selection must refer back to the source Model ID and stable Element IDs; it is not an implicit replacement of the complete ROBOT-Model.
 - Current UUID assignment is a first-import identity mechanism, not an implemented merge, reimport, or SysId extraction workflow.
+
+## MJCF explicit-value validation stage
+
+The read-only MJCF inspector validates selected **explicit** physical numeric attributes: positive mass and diagonal inertia, finite six-component full inertia, ordered joint/actuator ranges, and nonnegative damping, armature, friction loss, kp and kv. Missing attributes remain permissible at this stage. Invalid numeric tokens, nonfinite values and incorrect component counts are rejected.
+
+This is intentionally **not** a MuJoCo compiler equivalence guarantee. In particular, defaults/class resolution, includes, inertia positive-definiteness and triangle inequalities, actuator subtype-specific restrictions, and full model physics validation require later stages. Raw XML is still retained for exact unchanged-source export.

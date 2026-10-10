@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<robot name="vendor_extension" xmlns:vendor="https://example.org/vendor/schema" vendor:revision="3">
+  <vendor:metadata vendor:mode="simulation"><vendor:payload id="A">retain &amp; restore</vendor:payload></vendor:metadata>
+  <link name="base" custom="preserve-me"><vendor:calibration temperature="20"><vendor:offset xyz="0.01 0 0"/></vendor:calibration></link>
+  <link name="tip"/>
+  <joint name="hinge" type="continuous"><parent link="base"/><child link="tip"/><axis xyz="0 0 1"/><limit effort="1" velocity="1"/><vendor:controller gain="5"/></joint>
+  <gazebo reference="tip"><material>Gazebo/Blue</material><plugin name="sample" filename="libsample.so"/></gazebo>
+</robot>

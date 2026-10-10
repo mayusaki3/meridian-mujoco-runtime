@@ -1,0 +1,1 @@
+<mujoco model="minimal"><worldbody><body name="base"><geom name="base_geom" type="sphere" size="0.05" mass="1"/></body></worldbody></mujoco>

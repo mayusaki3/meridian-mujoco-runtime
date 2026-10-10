@@ -2,6 +2,7 @@
 use roxmltree::Document;
 
 pub mod structure;
+pub mod mjcf;
 pub mod source_mapping;
 pub mod rename_export;
 pub mod placement;

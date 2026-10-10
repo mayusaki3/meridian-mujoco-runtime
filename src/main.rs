@@ -1,5 +1,7 @@
 mod urdf_io;
 mod runtime_project;
+#[cfg(test)]
+mod urdf_fixture_tests;
 
 use std::{path::PathBuf, sync::{Arc, Mutex}};
 use workflow_ide_framework::{

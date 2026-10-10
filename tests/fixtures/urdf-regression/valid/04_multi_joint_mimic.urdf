@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot name="finger_mimic">
+  <link name="palm"/><link name="proximal"/><link name="distal"/>
+  <joint name="mcp" type="revolute"><parent link="palm"/><child link="proximal"/><axis xyz="0 1 0"/><limit lower="0" upper="1.4" effort="2" velocity="2"/></joint>
+  <joint name="pip" type="revolute"><parent link="proximal"/><child link="distal"/><origin xyz="0 0 0.08"/><axis xyz="0 1 0"/><limit lower="0" upper="1.4" effort="2" velocity="2"/><mimic joint="mcp" multiplier="0.7" offset="0"/></joint>
+</robot>

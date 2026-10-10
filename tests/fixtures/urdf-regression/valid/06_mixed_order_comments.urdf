@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Header comment should survive byte-for-byte. -->
+<robot name="mixed_order" xmlns:v="urn:example:extensions">
+  <v:note id="first">one</v:note>
+  <link name="base"/>
+  <!-- An interleaved comment -->
+  <v:note id="second"><v:child enabled="true"/></v:note>
+  <link name="tip"/>
+  <joint name="fixed_joint" type="fixed"><parent link="base"/><child link="tip"/></joint>
+  <v:note id="first">one</v:note>
+</robot>

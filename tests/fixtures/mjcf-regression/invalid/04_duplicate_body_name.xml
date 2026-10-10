@@ -1,0 +1,1 @@
+<mujoco model="duplicate_body"><worldbody><body name="same"><geom type="sphere" size="0.1" mass="1"/></body><body name="same"><geom type="sphere" size="0.1" mass="1"/></body></worldbody></mujoco>

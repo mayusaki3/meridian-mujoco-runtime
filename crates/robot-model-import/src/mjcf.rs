@@ -43,6 +43,7 @@ pub enum MjcfError {
     DuplicateJoint(String),
     DuplicateTendon(String),
     DuplicateSite(String),
+    InvalidNumericAttribute { element: String, attribute: String, value: String },
     InvalidJointType(String),
     UnknownActuatorTarget { actuator: String, target: String },
 }
@@ -51,10 +52,59 @@ fn element<'a, 'input>(node: Node<'a, 'input>, name: &str) -> bool {
     node.is_element() && node.tag_name().namespace().is_none() && node.tag_name().name() == name
 }
 
+// Validate explicit literal values only. MJCF defaults, compiler inference and
+// expression-like extensions are outside this read-only inspection stage.
+fn check_numeric(node: Node<'_, '_>, attr: &str, arity: usize, positive: bool, nonnegative: bool, ordered: bool) -> Result<(), MjcfError> {
+    let Some(raw) = node.attribute(attr) else { return Ok(()); };
+    let values: Vec<f64> = raw.split_whitespace().filter_map(|v| v.parse::<f64>().ok()).collect();
+    let valid = values.len() == arity
+        && values.iter().all(|v| v.is_finite() && (!positive || *v > 0.0) && (!nonnegative || *v >= 0.0))
+        && (!ordered || values[0] <= values[1]);
+    if !valid {
+        return Err(MjcfError::InvalidNumericAttribute {
+            element: node.tag_name().name().to_owned(), attribute: attr.to_owned(), value: raw.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn validate_explicit_physics(root: Node<'_, '_>) -> Result<(), MjcfError> {
+    for node in root.descendants().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
+        match node.tag_name().name() {
+            "body" | "geom" => {
+                check_numeric(node, "mass", 1, true, false, false)?;
+            }
+            _ => {}
+        }
+        match node.tag_name().name() {
+            "inertial" => {
+                check_numeric(node, "mass", 1, true, false, false)?;
+                check_numeric(node, "diaginertia", 3, true, false, false)?;
+                check_numeric(node, "fullinertia", 6, false, false, false)?;
+            }
+            "joint" => {
+                check_numeric(node, "range", 2, false, false, true)?;
+                check_numeric(node, "damping", 1, false, true, false)?;
+                check_numeric(node, "armature", 1, false, true, false)?;
+                check_numeric(node, "frictionloss", 1, false, true, false)?;
+            }
+            "motor" | "position" | "velocity" | "general" | "intvelocity" | "damper" | "adhesion" | "cylinder" | "muscle" => {
+                check_numeric(node, "ctrlrange", 2, false, false, true)?;
+                check_numeric(node, "forcerange", 2, false, false, true)?;
+                check_numeric(node, "kp", 1, false, true, false)?;
+                check_numeric(node, "kv", 1, false, true, false)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
     let doc = Document::parse(xml).map_err(|e| MjcfError::InvalidXml(e.to_string()))?;
     let root = doc.root_element();
     if !element(root, "mujoco") { return Err(MjcfError::InvalidRoot); }
+    validate_explicit_physics(root)?;
     let mut result = InspectedMjcf {
         model_name: root.attribute("model").map(str::to_owned),
         bodies: vec![], joints: vec![], actuators: vec![], tendons: vec![],
@@ -179,6 +229,28 @@ mod tests {
         assert_eq!(inspect_mjcf(valid).unwrap().actuators[0].site.as_deref(), Some("tip"));
         let duplicate = r#"<mujoco><worldbody><site name="s"/><body name="a"><site name="s"/></body></worldbody></mujoco>"#;
         assert_eq!(inspect_mjcf(duplicate), Err(MjcfError::DuplicateSite("s".into())));
+    }
+    #[test]
+    fn rejects_invalid_explicit_physics_values() {
+        for (xml, attribute) in [
+            (r#"<mujoco><worldbody><body><inertial mass="-1"/></body></worldbody></mujoco>"#, "mass"),
+            (r#"<mujoco><worldbody><body><inertial diaginertia="1 0 1"/></body></worldbody></mujoco>"#, "diaginertia"),
+            (r#"<mujoco><worldbody><body><joint range="2 1"/></body></worldbody></mujoco>"#, "range"),
+            (r#"<mujoco><worldbody><body><joint damping="-0.2"/></body></worldbody></mujoco>"#, "damping"),
+            (r#"<mujoco><worldbody><body><joint armature="NaN"/></body></worldbody></mujoco>"#, "armature"),
+            (r#"<mujoco><actuator><motor ctrlrange="1 0"/></actuator></mujoco>"#, "ctrlrange"),
+            (r#"<mujoco><actuator><position kp="-1"/></actuator></mujoco>"#, "kp"),
+            (r#"<mujoco><actuator><velocity kv="infinity"/></actuator></mujoco>"#, "kv"),
+            (r#"<mujoco><actuator><motor forcerange="1 nope"/></actuator></mujoco>"#, "forcerange"),
+        ] {
+            assert!(matches!(inspect_mjcf(xml), Err(MjcfError::InvalidNumericAttribute { attribute: a, .. }) if a == attribute), "{xml}");
+        }
+    }
+    #[test]
+    fn accepts_missing_and_valid_explicit_physics_values() {
+        let xml = r#"<mujoco><default><joint damping="0.2" armature="0.01"/></default><worldbody><body name="b"><joint range="-1 1" damping="0"/><geom mass="0.5"/><inertial mass="1" diaginertia="0.1 0.2 0.3"/></body></worldbody><actuator><motor ctrlrange="-2 2" forcerange="-10 10"/></actuator></mujoco>"#;
+        assert!(inspect_mjcf(xml).is_ok());
+        assert!(inspect_mjcf(r#"<mujoco><worldbody><body name="b"><joint/></body></worldbody></mujoco>"#).is_ok());
     }
     #[test]
     fn invalid_fixtures_are_rejected() {

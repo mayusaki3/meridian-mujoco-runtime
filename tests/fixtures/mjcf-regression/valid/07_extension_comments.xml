@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Preserve this comment and whitespace exactly. -->
+<mujoco model="extension_comments" xmlns:vendor="urn:example:vendor" vendor:revision="1">
+  <custom><text name="author" data="test-suite"/></custom>
+  <worldbody>
+    <body name="base" vendor:calibration="0.2">
+      <geom type="sphere" size="0.05" mass="1"/>
+    </body>
+  </worldbody>
+  <vendor:metadata><vendor:entry id="1"/><vendor:entry id="1"/></vendor:metadata>
+</mujoco>

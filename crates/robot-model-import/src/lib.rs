@@ -1,6 +1,7 @@
 //! Initial read-only URDF XML inspection. No lossy exporter is exposed.
 use roxmltree::Document;
 
+pub mod structure;
 pub mod source_mapping;
 pub mod rename_export;
 pub mod placement;

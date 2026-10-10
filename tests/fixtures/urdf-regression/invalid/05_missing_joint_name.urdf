@@ -1,0 +1,1 @@
+<robot name="missing_joint_name"><link name="base"/><joint type="fixed"><parent link="base"/><child link="base"/></joint></robot>

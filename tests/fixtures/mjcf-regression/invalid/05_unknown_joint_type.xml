@@ -1,0 +1,1 @@
+<mujoco model="unknown_joint"><worldbody><body name="base"><joint name="j" type="teleport"/><geom type="sphere" size="0.1" mass="1"/></body></worldbody></mujoco>

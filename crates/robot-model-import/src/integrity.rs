@@ -6,6 +6,7 @@ use std::collections::HashSet;
 pub enum IntegrityError {
     UnsupportedSchema(u32),
     DuplicateId(String),
+    InvalidId(String),
     MissingReference { owner: String, target: String },
     SelfParent(String),
     BodyCycle(String),
@@ -14,6 +15,7 @@ pub enum IntegrityError {
 pub fn validate_model(model: &RobotModel) -> Result<(), IntegrityError> {
     if model.schema_version != 1 { return Err(IntegrityError::UnsupportedSchema(model.schema_version)); }
     let mut all: HashSet<String> = HashSet::new();
+    if uuid::Uuid::parse_str(&model.model_id).is_err() { return Err(IntegrityError::InvalidId(model.model_id.clone())); }
     let mut bodies = HashSet::new();
     let mut joints = HashSet::new();
     let mut tendons = HashSet::new();
@@ -28,12 +30,13 @@ pub fn validate_model(model: &RobotModel) -> Result<(), IntegrityError> {
     for actuator in &model.actuators {
         if !all.insert(actuator.id.clone()) { return Err(IntegrityError::DuplicateId(actuator.id.clone())); }
     }
-    for (i, _) in model.tendons.iter().enumerate() {
-        let id = format!("tendon:{i}");
+    for tendon in &model.tendons {
+        let id = tendon.id.clone();
         if !all.insert(id.clone()) { return Err(IntegrityError::DuplicateId(id)); }
         tendons.insert(id);
     }
     // Site targets are retained by source name until sites are modeled explicitly.
+    for id in &all { if uuid::Uuid::parse_str(id).is_err() { return Err(IntegrityError::InvalidId(id.clone())); } }
     for body in &model.bodies {
         if let Some(parent) = &body.parent_id {
             if parent == &body.id { return Err(IntegrityError::SelfParent(body.id.clone())); }

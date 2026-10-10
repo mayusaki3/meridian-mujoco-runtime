@@ -1,0 +1,1 @@
+<mujoco model="missing_target"><worldbody><body name="base"><geom type="sphere" size="0.1" mass="1"/></body></worldbody><actuator><motor name="motor" joint="nonexistent"/></actuator></mujoco>

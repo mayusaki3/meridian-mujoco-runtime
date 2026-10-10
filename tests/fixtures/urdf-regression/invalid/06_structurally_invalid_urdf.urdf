@@ -1,0 +1,1 @@
+<robot name="bad_reference"><link name="base"/><joint name="bad" type="fixed"><parent link="base"/><child link="nonexistent"/></joint></robot>

@@ -40,6 +40,9 @@ pub enum MjcfError {
     InvalidXml(String),
     InvalidRoot,
     DuplicateBody(String),
+    DuplicateJoint(String),
+    DuplicateTendon(String),
+    DuplicateSite(String),
     InvalidJointType(String),
     UnknownActuatorTarget { actuator: String, target: String },
 }
@@ -60,7 +63,15 @@ pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
     let mut body_names = HashSet::new();
     let mut joint_names = HashSet::new();
     let mut tendon_names = HashSet::new();
+    let mut site_names = HashSet::new();
     if let Some(worldbody) = root.children().find(|n| element(*n, "worldbody")) {
+        for site in worldbody.descendants().filter(|n| element(*n, "site")) {
+            if let Some(name) = site.attribute("name") {
+                if !site_names.insert(name.to_owned()) {
+                    return Err(MjcfError::DuplicateSite(name.to_owned()));
+                }
+            }
+        }
         for body in worldbody.descendants().filter(|n| element(*n, "body")) {
             let body_name = body.attribute("name").map(str::to_owned).unwrap_or_else(|| format!("@{}", body.range().start));
             if !body_names.insert(body_name.clone()) { return Err(MjcfError::DuplicateBody(body_name)); }
@@ -71,7 +82,9 @@ pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
                     return Err(MjcfError::InvalidJointType(kind));
                 }
                 let name = joint.attribute("name").map(str::to_owned);
-                if let Some(ref n) = name { joint_names.insert(n.clone()); }
+                if let Some(ref n) = name {
+                    if !joint_names.insert(n.clone()) { return Err(MjcfError::DuplicateJoint(n.clone())); }
+                }
                 result.joints.push(MjcfJoint { name, joint_type: kind, body: body_name.clone() });
             }
         }
@@ -79,7 +92,7 @@ pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
     if let Some(tendon) = root.children().find(|n| element(*n, "tendon")) {
         for node in tendon.children().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
             if let Some(name) = node.attribute("name") {
-                tendon_names.insert(name.to_owned());
+                if !tendon_names.insert(name.to_owned()) { return Err(MjcfError::DuplicateTendon(name.to_owned())); }
                 result.tendons.push(name.to_owned());
             }
         }
@@ -88,7 +101,7 @@ pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
         for node in actuators.children().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
             let name = node.attribute("name").map(str::to_owned);
             let label = name.clone().unwrap_or_else(|| format!("@{}", node.range().start));
-            for (attr, known) in [("joint", &joint_names), ("tendon", &tendon_names)] {
+            for (attr, known) in [("joint", &joint_names), ("tendon", &tendon_names), ("site", &site_names)] {
                 if let Some(target) = node.attribute(attr) {
                     if !known.contains(target) {
                         return Err(MjcfError::UnknownActuatorTarget { actuator: label, target: target.to_owned() });
@@ -144,6 +157,28 @@ mod tests {
         assert_eq!(servo.actuators[0].kv.as_deref(), Some("5"));
         let coupled = inspect_mjcf(VALID[4]).unwrap();
         assert_eq!(coupled.actuators[0].tendon.as_deref(), Some("coupled"));
+    }
+    #[test]
+    fn duplicate_named_joints_are_rejected() {
+        let xml = r#"<mujoco><worldbody><body name="a"><joint name="j"/></body><body name="b"><joint name="j"/></body></worldbody></mujoco>"#;
+        assert_eq!(inspect_mjcf(xml), Err(MjcfError::DuplicateJoint("j".into())));
+    }
+    #[test]
+    fn duplicate_named_tendons_are_rejected() {
+        let xml = r#"<mujoco><tendon><fixed name="t"/><fixed name="t"/></tendon></mujoco>"#;
+        assert_eq!(inspect_mjcf(xml), Err(MjcfError::DuplicateTendon("t".into())));
+    }
+    #[test]
+    fn missing_actuator_site_is_rejected() {
+        let xml = r#"<mujoco><worldbody><body name="a"/></worldbody><actuator><motor name="m" site="missing"/></actuator></mujoco>"#;
+        assert!(matches!(inspect_mjcf(xml), Err(MjcfError::UnknownActuatorTarget { target, .. }) if target == "missing"));
+    }
+    #[test]
+    fn duplicate_sites_and_valid_site_actuator() {
+        let valid = r#"<mujoco><worldbody><site name="anchor"/><body name="a"><site name="tip"/></body></worldbody><actuator><motor name="m" site="tip"/></actuator></mujoco>"#;
+        assert_eq!(inspect_mjcf(valid).unwrap().actuators[0].site.as_deref(), Some("tip"));
+        let duplicate = r#"<mujoco><worldbody><site name="s"/><body name="a"><site name="s"/></body></worldbody></mujoco>"#;
+        assert_eq!(inspect_mjcf(duplicate), Err(MjcfError::DuplicateSite("s".into())));
     }
     #[test]
     fn invalid_fixtures_are_rejected() {

@@ -44,3 +44,15 @@ One canonical model shared by URDF import/export, MJCF import/export and SysId. 
 - `tests/fixtures/mjcf-regression/`
 
 MJCF fixtures are committed as data first. Parser, validator, and MuJoCo engine compatibility tests are follow-up tasks.
+
+## Agreed identity, import, merge, and SysId policy (2026-10-10)
+
+- Identity is two-level: `Model ID + Element ID`. Both are UUIDs owned by ROBOT-Model, not URDF/MJCF XML names or positions.
+- Element IDs are unique within one model; different models may contain identical Element IDs. Global references must use the pair.
+- Rename, reorder, parameter editing, and persistence retain IDs. Importing as a new model issues a new Model ID and new Element IDs.
+- If distributed models contain colliding identifiers, user-directed re-identification will be supported in a later version, including remapping all internal references.
+- Each URDF/MJCF import **adds** an independent ROBOT-Model to the project. Import does not silently reconcile or merge existing models.
+- Future merge: user selects two existing models, compares them side-by-side, explicitly resolves element correspondence and conflicts, and creates a **third, new model**. The two input models remain unchanged, enabling retries.
+- Merge and reimport reconciliation are **out of scope for the first version**. Merge identity remapping, revision provenance, and collision policy must be designed before implementing merge.
+- After a ROBOT-Model is prepared, the user will select/extract a SysId model from it. The SysId selection must refer back to the source Model ID and stable Element IDs; it is not an implicit replacement of the complete ROBOT-Model.
+- Current UUID assignment is a first-import identity mechanism, not an implemented merge, reimport, or SysId extraction workflow.

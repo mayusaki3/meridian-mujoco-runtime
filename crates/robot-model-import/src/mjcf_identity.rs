@@ -1,6 +1,6 @@
 //! Conservative, read-only identity reconciliation across MJCF imports.
 //! This produces a plan; it does not mutate either RobotModel.
-use crate::model::RobotModel;
+use crate::model::{RobotModel, TransmissionTarget};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,28 +43,37 @@ pub fn plan_named_identity_reuse(old: &RobotModel, new: &RobotModel) -> Result<I
         .fold(HashMap::new(), |mut m, b| { *m.entry(b.name.as_str()).or_insert(0usize) += 1; m });
     let new_body_counts = new.bodies.iter().filter(|b| !b.name.starts_with('@'))
         .fold(HashMap::new(), |mut m, b| { *m.entry(b.name.as_str()).or_insert(0usize) += 1; m });
-    // Parent-first iteration is not required: the final parent identity check
-    // uses names of both parents, rejecting unnamed or changed parents.
-    for b in &new.bodies {
-        let candidate = old_bodies.get(b.name.as_str()).copied().filter(|_| !b.name.starts_with('@'))
-            .filter(|_| old_body_counts.get(b.name.as_str()) == Some(&1))
-            .filter(|_| new_body_counts.get(b.name.as_str()) == Some(&1));
-        let same_parent = |o: &crate::model::Body| {
-            match (&o.parent_id, &b.parent_id) {
-                (None, None) => true,
-                (Some(op), Some(np)) => {
-                    let a = old.bodies.iter().find(|x| &x.id == op);
-                    let z = new.bodies.iter().find(|x| &x.id == np);
-                    matches!((a,z), (Some(a),Some(z)) if !a.name.starts_with('@') && a.name == z.name
-                        && old_body_counts.get(a.name.as_str()) == Some(&1)
-                        && new_body_counts.get(z.name.as_str()) == Some(&1))
-                }
-                _ => false,
+    // Reconcile parents first. A child is safe only if its parent is itself
+    // safely reused; this checks the entire ancestor chain transitively.
+    let mut pending: Vec<_> = new.bodies.iter().collect();
+    while !pending.is_empty() {
+        let mut next = Vec::new();
+        let mut progressed = false;
+        for b in pending {
+            let candidate = old_bodies.get(b.name.as_str()).copied()
+                .filter(|_| !b.name.starts_with('@'))
+                .filter(|_| old_body_counts.get(b.name.as_str()) == Some(&1))
+                .filter(|_| new_body_counts.get(b.name.as_str()) == Some(&1));
+            let parent_ready = b.parent_id.as_ref().is_none_or(|p|
+                reuse.contains_key(p) || !new.bodies.iter().any(|x| &x.id == p));
+            if !parent_ready {
+                next.push(b);
+                continue;
             }
-        };
-        if let Some(o) = candidate.filter(|o| same_parent(o)) {
-            reuse.insert(b.id.clone(), o.id.clone());
-        } else { unresolved.push(b.id.clone()); }
+            progressed = true;
+            let valid = candidate.filter(|o| match (&o.parent_id, &b.parent_id) {
+                (None, None) => true,
+                (Some(op), Some(np)) => reuse.get(np) == Some(op),
+                _ => false,
+            });
+            if let Some(o) = valid { reuse.insert(b.id.clone(), o.id.clone()); }
+            else { unresolved.push(b.id.clone()); }
+        }
+        if !progressed {
+            unresolved.extend(next.into_iter().map(|b| b.id.clone()));
+            break;
+        }
+        pending = next;
     }
     let old_joints: HashMap<_, _> = old.joints.iter().filter_map(|j| j.name.as_deref().map(|n| (n,j))).collect();
     let count_joints = |m: &RobotModel| m.joints.iter().filter_map(|j| j.name.clone())
@@ -92,7 +101,30 @@ pub fn plan_named_identity_reuse(old: &RobotModel, new: &RobotModel) -> Result<I
             reuse.insert(t.id.clone(), o.id.clone());
         } else { unresolved.push(t.id.clone()); }
     }
-    unresolved.extend(new.actuators.iter().map(|a| a.id.clone()));
+    // Actuators need a unique explicit name, matching kind, and a target
+    // that has already been reconciled (or the same named site).
+    let old_actuators: HashMap<_, _> = old.actuators.iter()
+        .filter_map(|a| a.name.as_deref().map(|n| (n, a))).collect();
+    let count_actuators = |m: &RobotModel| m.actuators.iter()
+        .filter_map(|a| a.name.clone())
+        .fold(HashMap::new(), |mut counts, name| {
+            *counts.entry(name).or_insert(0usize) += 1; counts
+        });
+    let oa = count_actuators(old);
+    let na = count_actuators(new);
+    for a in &new.actuators {
+        let candidate = a.name.as_deref().and_then(|n| old_actuators.get(n).copied()
+            .filter(|_| oa.get(n) == Some(&1) && na.get(n) == Some(&1)));
+        let same_target = |other: &crate::model::Actuator| match (&a.target, &other.target) {
+            (TransmissionTarget::Joint(n), TransmissionTarget::Joint(o))
+            | (TransmissionTarget::Tendon(n), TransmissionTarget::Tendon(o)) => reuse.get(n) == Some(o),
+            (TransmissionTarget::Site(n), TransmissionTarget::Site(o)) => n == o,
+            _ => false,
+        };
+        if let Some(o) = candidate.filter(|o| o.kind == a.kind && same_target(o)) {
+            reuse.insert(a.id.clone(), o.id.clone());
+        } else { unresolved.push(a.id.clone()); }
+    }
     Ok(IdentityPlan { reuse, unresolved })
 }
 

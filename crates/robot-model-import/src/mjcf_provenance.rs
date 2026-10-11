@@ -92,6 +92,67 @@ pub fn map_named_elements(bundle: &PortableMjcfBundle) -> Result<MjcfProvenance,
     Ok(MjcfProvenance { model_id: model.model_id.clone(), origins })
 }
 
+
+
+/// Strict opt-in mapping for a single MJCF file without includes.
+/// Traversal order is valid only when the saved expanded XML exactly equals
+/// the entry XML. Multi-file bundles must wait for include source spans.
+pub fn map_single_source_elements(bundle: &PortableMjcfBundle) -> Result<MjcfProvenance, ProvenanceError> {
+    let xml = bundle.sources.get(&bundle.entry_path)
+        .ok_or_else(|| ProvenanceError::InvalidXml(bundle.entry_path.clone()))?;
+    if bundle.sources.len() != 1 || xml != &bundle.model.original_xml {
+        return Err(ProvenanceError::UnnamedElement("requires unchanged single-source MJCF".into()));
+    }
+    let doc = roxmltree::Document::parse(xml)
+        .map_err(|_| ProvenanceError::InvalidXml(bundle.entry_path.clone()))?;
+    let root = doc.root_element();
+    let worldbody = root.children().find(|n| n.has_tag_name("worldbody"));
+    let body_nodes: Vec<_> = worldbody.into_iter().flat_map(|w| w.descendants())
+        .filter(|n| n.is_element() && n.has_tag_name("body")).collect();
+    let joint_nodes: Vec<_> = body_nodes.iter().flat_map(|b| b.children())
+        .filter(|n| n.is_element() && n.has_tag_name("joint")).collect();
+    let tendon_nodes: Vec<_> = root.children().filter(|n| n.has_tag_name("tendon"))
+        .flat_map(|t| t.children()).filter(|n| n.is_element()).collect();
+    let actuator_nodes: Vec<_> = root.children().filter(|n| n.has_tag_name("actuator"))
+        .flat_map(|a| a.children()).filter(|n| n.is_element()).collect();
+    if body_nodes.len() != bundle.model.bodies.len()
+        || joint_nodes.len() != bundle.model.joints.len()
+        || tendon_nodes.len() != bundle.model.tendons.len()
+        || actuator_nodes.len() != bundle.model.actuators.len() {
+        return Err(ProvenanceError::InvalidModelId);
+    }
+    let mut origins = BTreeMap::new();
+    let mut insert = |id: &str, node: roxmltree::Node<'_, '_>, expected: Option<&str>| -> Result<(), ProvenanceError> {
+        if node.attribute("name") != expected { return Err(ProvenanceError::InvalidModelId); }
+        origins.insert(id.to_owned(), ElementOrigin {
+            source_path: bundle.entry_path.clone(),
+            element_tag: node.tag_name().name().to_owned(),
+            source_name: expected.unwrap_or("").to_owned(),
+            byte_offset: node.range().start,
+        });
+        Ok(())
+    };
+    for (body, node) in bundle.model.bodies.iter().zip(&body_nodes) {
+        let name = node.attribute("name");
+        if body.name != name.map(str::to_owned).unwrap_or_else(|| format!("@{}", node.range().start)) {
+            return Err(ProvenanceError::InvalidModelId);
+        }
+        insert(&body.id, *node, name)?;
+    }
+    for (joint, node) in bundle.model.joints.iter().zip(&joint_nodes) {
+        insert(&joint.id, *node, joint.name.as_deref())?;
+        if node.attribute("type").unwrap_or("hinge") != joint.kind { return Err(ProvenanceError::InvalidModelId); }
+    }
+    for (tendon, node) in bundle.model.tendons.iter().zip(&tendon_nodes) {
+        insert(&tendon.id, *node, Some(&tendon.name))?;
+    }
+    for (actuator, node) in bundle.model.actuators.iter().zip(&actuator_nodes) {
+        insert(&actuator.id, *node, actuator.name.as_deref())?;
+        if node.tag_name().name() != actuator.kind { return Err(ProvenanceError::InvalidModelId); }
+    }
+    Ok(MjcfProvenance { model_id: bundle.model.model_id.clone(), origins })
+}
+
 impl MjcfProvenance {
 
     /// Verify that each stored byte offset still points to the same named
@@ -146,6 +207,35 @@ mod tests {
         }
     }
     impl Drop for Fixture { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
+
+
+    #[test]
+    fn single_source_maps_unnamed_body_joint_and_actuator() {
+        let f = Fixture::new();
+        f.put("main.xml", r#"<mujoco><worldbody><body><joint/></body></worldbody><actuator><motor/></actuator></mujoco>"#);
+        let portable = f.portable();
+        let mapped = map_single_source_elements(&portable).unwrap();
+        assert_eq!(mapped.origins.len(), 3);
+        assert_eq!(mapped.origins[&portable.model.joints[0].id].source_name, "");
+        assert_eq!(mapped.origins[&portable.model.actuators[0].id].element_tag, "motor");
+        let json = serde_json::to_string(&mapped).unwrap();
+        let decoded: MjcfProvenance = serde_json::from_str(&json).unwrap();
+        assert_eq!(mapped, decoded);
+    }
+
+    #[test]
+    fn single_source_mapping_rejects_includes_and_source_changes() {
+        let f = Fixture::new();
+        f.put("main.xml", r#"<mujoco><include file="part.xml"/></mujoco>"#);
+        f.put("part.xml", r#"<mujocoinclude><worldbody><body/></worldbody></mujocoinclude>"#);
+        let portable = f.portable();
+        assert!(map_single_source_elements(&portable).is_err());
+        let f2 = Fixture::new();
+        f2.put("main.xml", r#"<mujoco><worldbody><body/></worldbody></mujoco>"#);
+        let mut changed = f2.portable();
+        changed.sources.insert(PathBuf::from("main.xml"), "<mujoco/>".into());
+        assert!(map_single_source_elements(&changed).is_err());
+    }
 
     #[test]
     fn maps_named_elements_across_nested_include_and_json() {

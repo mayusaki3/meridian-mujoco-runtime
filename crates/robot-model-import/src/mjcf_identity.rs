@@ -133,6 +133,26 @@ mod tests {
     use super::*;
     use crate::model::from_mjcf;
     #[test]
+    fn ancestor_change_blocks_descendant_reuse() {
+        let a = from_mjcf(r#"<mujoco><worldbody><body name="a"><body name="middle"><body name="leaf"/></body></body><body name="b"/></worldbody></mujoco>"#).unwrap();
+        let b = from_mjcf(r#"<mujoco><worldbody><body name="a"/><body name="b"><body name="middle"><body name="leaf"/></body></body></worldbody></mujoco>"#).unwrap();
+        let plan = plan_named_identity_reuse(&a, &b).unwrap();
+        assert_eq!(plan.reuse.len(), 2);
+        assert_eq!(plan.unresolved.len(), 2);
+    }
+    #[test]
+    fn named_actuator_requires_reconciled_target() {
+        let a = from_mjcf(r#"<mujoco><worldbody><body name="b"><joint name="j"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#).unwrap();
+        let b = from_mjcf(r#"<mujoco> <worldbody><body name="b"><joint name="j"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#).unwrap();
+        let plan = plan_named_identity_reuse(&a, &b).unwrap();
+        assert_eq!(plan.reuse.len(), 3);
+        assert!(plan.unresolved.is_empty());
+        let c = from_mjcf(r#"<mujoco><worldbody><body name="b"><joint name="j" type="slide"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#).unwrap();
+        let plan = plan_named_identity_reuse(&a, &c).unwrap();
+        assert_eq!(plan.reuse.len(), 1);
+        assert_eq!(plan.unresolved.len(), 2);
+    }
+    #[test]
     fn named_body_joint_tendon_survive_whitespace_changes() {
         let a = from_mjcf(r#"<mujoco><worldbody><body name="arm"><joint name="hinge"/></body></worldbody><tendon><fixed name="rope"/></tendon></mujoco>"#).unwrap();
         let b = from_mjcf(r#"<mujoco> <worldbody><body name="arm"><joint name="hinge"/></body></worldbody><tendon><fixed name="rope"/></tendon></mujoco>"#).unwrap();

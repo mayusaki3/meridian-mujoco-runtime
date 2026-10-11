@@ -36,7 +36,7 @@ fn load(path: &Path, sources: &mut BTreeMap<PathBuf, String>, active: &mut HashS
     let xml = fs::read_to_string(&canonical).map_err(|e| ResolveError::Io { path: canonical.clone(), message: e.to_string() })?;
     let doc = Document::parse(&xml).map_err(|e| ResolveError::InvalidXml { path: canonical.clone(), message: e.to_string() })?;
     let root = doc.root_element();
-    if sources.is_empty() {
+    if active.is_empty() {
         if root.tag_name().name() != "mujoco" || root.tag_name().namespace().is_some() {
             return Err(ResolveError::InvalidIncludeRoot(canonical));
         }
@@ -127,7 +127,8 @@ mod tests {
         f.put("main.xml", r#"<mujoco><include file="part.xml"/><actuator><motor joint="absent"/></actuator></mujoco>"#);
         f.put("part.xml", r#"<mujocoinclude><worldbody><body name="b"><joint name="j"/></body></worldbody></mujocoinclude>"#);
         assert!(matches!(inspect_mjcf_file(&f.0.join("main.xml")), Err(ResolveError::Inspection(MjcfError::UnknownActuatorTarget { .. }))));
-        f.put("main.xml", r#"<mujoco><include file="part.xml"/><worldbody><body name="b"/></worldbody></mujoco>"#);
+        f.put("part.xml", r#"<mujocoinclude><body name="b"/></mujocoinclude>"#);
+        f.put("main.xml", r#"<mujoco><worldbody><include file="part.xml"/><body name="b"/></worldbody></mujoco>"#);
         assert!(matches!(inspect_mjcf_file(&f.0.join("main.xml")), Err(ResolveError::Inspection(MjcfError::DuplicateBody(_)))));
     }
 }

@@ -96,3 +96,9 @@ This ordering-based mapping must **not** be applied to included sources. Source 
 `mjcf_source_spans::source_byte_map` reconstructs the existing include expansion and records an original relative file path and byte offset for each expanded XML byte. It requires exact equality with the saved `RobotModel.original_xml`. `mjcf_provenance::map_included_elements` then associates projected Body, Joint, Tendon and Actuator UUIDs with the original opening tag, including unnamed elements in nested includes. This is read-only; original files and the existing bundle schema are unchanged.
 
 The span-based map is reconstructed from the stored source snapshot. Its offsets are not durable identifiers across source edits, and `MjcfProvenance::validate_against` remains the older named-element validator; do not use it to validate span-based unnamed mappings. Future work: dedicated validation of span-based provenance and explicit stable identity/reconciliation across source edits.
+
+### Validation of persisted include provenance
+
+`MjcfProvenance::validate_included_elements(&PortableMjcfBundle)` is the validation entry point for `map_included_elements` results, including unnamed Body, Joint, and Actuator elements. It re-expands the retained source snapshot, requires exact equality with the saved expanded XML, reconstructs the UUID-to-origin map, compares all entries, and verifies each original XML node at the recorded byte offset. It rejects missing, renamed or relocated origins, changed UUIDs, model IDs, and source changes that affect expansion.
+
+The method validates consistency with the **current snapshot**, not authenticity against an independent prior snapshot. If source XML, expanded XML and saved provenance are all replaced consistently, this API alone cannot detect that replacement. A trusted digest or immutable baseline is needed for that guarantee. This method does not transfer UUIDs between edited models.

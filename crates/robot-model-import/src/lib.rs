@@ -8,6 +8,7 @@ pub mod mjcf_model_bundle;
 pub mod mjcf_portable;
 pub mod mjcf_provenance;
 pub mod mjcf_source_spans;
+pub mod mjcf_identity;
 pub mod model;
 pub mod integrity;
 pub mod source_mapping;

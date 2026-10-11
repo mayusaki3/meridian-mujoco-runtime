@@ -5,6 +5,7 @@ pub mod structure;
 pub mod mjcf;
 pub mod mjcf_include;
 pub mod mjcf_model_bundle;
+pub mod mjcf_portable;
 pub mod model;
 pub mod integrity;
 pub mod source_mapping;

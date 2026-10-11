@@ -45,6 +45,9 @@ pub enum MjcfError {
     DuplicateSite(String),
     InvalidNumericAttribute { element: String, attribute: String, value: String },
     InvalidJointType(String),
+    DuplicateDefaultClass(String),
+    UnknownDefaultClass(String),
+    UnresolvedInclude(String),
     UnknownActuatorTarget { actuator: String, target: String },
 }
 
@@ -100,11 +103,46 @@ fn validate_explicit_physics(root: Node<'_, '_>) -> Result<(), MjcfError> {
     Ok(())
 }
 
+// This stage checks class references without resolving inherited attribute values.
+// Include expansion requires a source path and external file resolver.
+fn validate_default_classes(root: Node<'_, '_>) -> Result<(), MjcfError> {
+    let mut classes = HashSet::new();
+    for node in root.descendants().filter(|n| element(*n, "default")) {
+        if let Some(class) = node.attribute("class") {
+            if !classes.insert(class.to_owned()) {
+                return Err(MjcfError::DuplicateDefaultClass(class.to_owned()));
+            }
+        }
+    }
+    for node in root.descendants().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
+        if element(node, "default") { continue; }
+        for attr in ["class", "childclass"] {
+            if let Some(class) = node.attribute(attr) {
+                if !classes.contains(class) {
+                    return Err(MjcfError::UnknownDefaultClass(class.to_owned()));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Strict single-document inspection: never treats unresolved includes as a
+/// complete model. The legacy inspector retains read-only partial inspection.
+pub fn inspect_mjcf_standalone(xml: &str) -> Result<InspectedMjcf, MjcfError> {
+    let doc = Document::parse(xml).map_err(|e| MjcfError::InvalidXml(e.to_string()))?;
+    for node in doc.root_element().descendants().filter(|n| element(*n, "include")) {
+        return Err(MjcfError::UnresolvedInclude(node.attribute("file").unwrap_or("").to_owned()));
+    }
+    inspect_mjcf(xml)
+}
+
 pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
     let doc = Document::parse(xml).map_err(|e| MjcfError::InvalidXml(e.to_string()))?;
     let root = doc.root_element();
     if !element(root, "mujoco") { return Err(MjcfError::InvalidRoot); }
     validate_explicit_physics(root)?;
+    validate_default_classes(root)?;
     let mut result = InspectedMjcf {
         model_name: root.attribute("model").map(str::to_owned),
         bodies: vec![], joints: vec![], actuators: vec![], tendons: vec![],
@@ -251,6 +289,22 @@ mod tests {
         let xml = r#"<mujoco><default><joint damping="0.2" armature="0.01"/></default><worldbody><body name="b"><joint range="-1 1" damping="0"/><geom mass="0.5"/><inertial mass="1" diaginertia="0.1 0.2 0.3"/></body></worldbody><actuator><motor ctrlrange="-2 2" forcerange="-10 10"/></actuator></mujoco>"#;
         assert!(inspect_mjcf(xml).is_ok());
         assert!(inspect_mjcf(r#"<mujoco><worldbody><body name="b"><joint/></body></worldbody></mujoco>"#).is_ok());
+    }
+    #[test]
+    fn default_classes_validate_references_and_duplicates() {
+        let valid = r#"<mujoco><default><joint damping="0.2"/><default class="soft"><joint damping="0.1"/></default></default><worldbody><body childclass="soft"><joint name="j" class="soft"/></body></worldbody></mujoco>"#;
+        assert!(inspect_mjcf(valid).is_ok());
+        let missing = r#"<mujoco><worldbody><body childclass="absent"/></worldbody></mujoco>"#;
+        assert_eq!(inspect_mjcf(missing), Err(MjcfError::UnknownDefaultClass("absent".into())));
+        let duplicate = r#"<mujoco><default><default class="same"/><default class="same"/></default></mujoco>"#;
+        assert_eq!(inspect_mjcf(duplicate), Err(MjcfError::DuplicateDefaultClass("same".into())));
+    }
+    #[test]
+    fn standalone_inspection_rejects_unresolved_include() {
+        let xml = r#"<mujoco><include file="parts.xml"/><worldbody/></mujoco>"#;
+        assert_eq!(inspect_mjcf_standalone(xml), Err(MjcfError::UnresolvedInclude("parts.xml".into())));
+        assert!(inspect_mjcf(xml).is_ok()); // partial read-only inspection remains available
+        assert!(inspect_mjcf_standalone(VALID[0]).is_ok());
     }
     #[test]
     fn invalid_fixtures_are_rejected() {

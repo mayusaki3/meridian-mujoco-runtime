@@ -93,6 +93,26 @@ pub fn map_named_elements(bundle: &PortableMjcfBundle) -> Result<MjcfProvenance,
 }
 
 impl MjcfProvenance {
+
+    /// Verify that each stored byte offset still points to the same named
+    /// XML element in the original source. This is a guard, not an edit API.
+    pub fn validate_source_locations(&self, bundle: &PortableMjcfBundle) -> Result<(), ProvenanceError> {
+        self.validate_against(bundle)?;
+        for origin in self.origins.values() {
+            let xml = bundle.sources.get(&origin.source_path)
+                .ok_or_else(|| ProvenanceError::InvalidXml(origin.source_path.clone()))?;
+            let doc = roxmltree::Document::parse(xml)
+                .map_err(|_| ProvenanceError::InvalidXml(origin.source_path.clone()))?;
+            let found = doc.descendants().any(|node|
+                node.is_element()
+                && node.range().start == origin.byte_offset
+                && node.tag_name().name() == origin.element_tag
+                && node.attribute("name") == Some(origin.source_name.as_str())
+            );
+            if !found { return Err(ProvenanceError::InvalidModelId); }
+        }
+        Ok(())
+    }
     pub fn validate_against(&self, bundle: &PortableMjcfBundle) -> Result<(), ProvenanceError> {
         if self.model_id != bundle.model.model_id { return Err(ProvenanceError::InvalidModelId); }
         let expected = map_named_elements(bundle)?;
@@ -140,6 +160,22 @@ mod tests {
         let json = serde_json::to_string(&provenance).unwrap();
         let restored: MjcfProvenance = serde_json::from_str(&json).unwrap();
         restored.validate_against(&portable).unwrap();
+    }
+
+    #[test]
+    fn source_locations_detect_xml_reordering_and_offset_tampering() {
+        let f = Fixture::new();
+        f.put("main.xml", r#"<mujoco><worldbody><body name="b"><joint name="j"/></body></worldbody></mujoco>"#);
+        let portable = f.portable();
+        let original = map_named_elements(&portable).unwrap();
+        original.validate_source_locations(&portable).unwrap();
+        let mut altered = original.clone();
+        altered.origins.get_mut(&portable.model.joints[0].id).unwrap().byte_offset += 1;
+        assert!(altered.validate_source_locations(&portable).is_err());
+        let mut changed = portable.clone();
+        changed.sources.insert(PathBuf::from("main.xml"),
+            r#"<mujoco><worldbody> <body name="b"><joint name="j"/></body></worldbody></mujoco>"#.into());
+        assert!(original.validate_source_locations(&changed).is_err());
     }
 
     #[test]

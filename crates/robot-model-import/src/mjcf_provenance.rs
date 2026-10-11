@@ -153,6 +153,68 @@ pub fn map_single_source_elements(bundle: &PortableMjcfBundle) -> Result<MjcfPro
     Ok(MjcfProvenance { model_id: bundle.model.model_id.clone(), origins })
 }
 
+
+/// Source-span-based mapping, including unnamed elements from nested includes.
+/// Model projection order and the saved expanded XML must match exactly.
+pub fn map_included_elements(bundle: &PortableMjcfBundle) -> Result<MjcfProvenance, ProvenanceError> {
+    let bytes = crate::mjcf_source_spans::source_byte_map(bundle)
+        .map_err(|_| ProvenanceError::InvalidModelId)?;
+    let doc = roxmltree::Document::parse(&bundle.model.original_xml)
+        .map_err(|_| ProvenanceError::InvalidModelId)?;
+    let root = doc.root_element();
+    let worldbody = root.children().find(|n| n.has_tag_name("worldbody"));
+    let bodies: Vec<_> = worldbody.into_iter().flat_map(|w| w.descendants())
+        .filter(|n| n.is_element() && n.has_tag_name("body")).collect();
+    let joints: Vec<_> = bodies.iter().flat_map(|b| b.children())
+        .filter(|n| n.is_element() && n.has_tag_name("joint")).collect();
+    let tendons: Vec<_> = root.children().filter(|n| n.has_tag_name("tendon"))
+        .flat_map(|t| t.children()).filter(|n| n.is_element()).collect();
+    let actuators: Vec<_> = root.children().filter(|n| n.has_tag_name("actuator"))
+        .flat_map(|a| a.children()).filter(|n| n.is_element()).collect();
+    if bodies.len() != bundle.model.bodies.len()
+        || joints.len() != bundle.model.joints.len()
+        || tendons.len() != bundle.model.tendons.len()
+        || actuators.len() != bundle.model.actuators.len() {
+        return Err(ProvenanceError::InvalidModelId);
+    }
+    let mut origins = BTreeMap::new();
+    let mut bind = |id: &str, node: roxmltree::Node<'_, '_>, expected: Option<&str>| -> Result<(), ProvenanceError> {
+        if node.attribute("name") != expected { return Err(ProvenanceError::InvalidModelId); }
+        let mapped = bytes.get(node.range().start).ok_or(ProvenanceError::InvalidModelId)?;
+        let xml = bundle.sources.get(&mapped.path).ok_or(ProvenanceError::InvalidModelId)?;
+        let opening = xml.get(mapped.offset..).ok_or(ProvenanceError::InvalidModelId)?;
+        if !opening.starts_with(&format!("<{}", node.tag_name().name())) {
+            return Err(ProvenanceError::InvalidModelId);
+        }
+        origins.insert(id.to_owned(), ElementOrigin {
+            source_path: mapped.path.clone(),
+            element_tag: node.tag_name().name().to_owned(),
+            source_name: expected.unwrap_or("").to_owned(),
+            byte_offset: mapped.offset,
+        });
+        Ok(())
+    };
+    for (body, node) in bundle.model.bodies.iter().zip(&bodies) {
+        let expected = node.attribute("name");
+        if body.name != expected.map(str::to_owned).unwrap_or_else(|| format!("@{}", node.range().start)) {
+            return Err(ProvenanceError::InvalidModelId);
+        }
+        bind(&body.id, *node, expected)?;
+    }
+    for (joint, node) in bundle.model.joints.iter().zip(&joints) {
+        if node.attribute("type").unwrap_or("hinge") != joint.kind { return Err(ProvenanceError::InvalidModelId); }
+        bind(&joint.id, *node, joint.name.as_deref())?;
+    }
+    for (tendon, node) in bundle.model.tendons.iter().zip(&tendons) {
+        bind(&tendon.id, *node, Some(&tendon.name))?;
+    }
+    for (actuator, node) in bundle.model.actuators.iter().zip(&actuators) {
+        if node.tag_name().name() != actuator.kind { return Err(ProvenanceError::InvalidModelId); }
+        bind(&actuator.id, *node, actuator.name.as_deref())?;
+    }
+    Ok(MjcfProvenance { model_id: bundle.model.model_id.clone(), origins })
+}
+
 impl MjcfProvenance {
 
     /// Verify that each stored byte offset still points to the same named
@@ -208,6 +270,21 @@ mod tests {
     }
     impl Drop for Fixture { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 
+
+    #[test]
+    fn included_unnamed_elements_map_to_original_files() {
+        let f = Fixture::new();
+        f.put("main.xml", r#"<mujoco><include file="sub/one.xml"/><actuator><motor/></actuator></mujoco>"#);
+        f.put("sub/one.xml", r#"<mujocoinclude><include file="two.xml"/></mujocoinclude>"#);
+        f.put("sub/two.xml", r#"<mujocoinclude><worldbody><body><joint/></body></worldbody></mujocoinclude>"#);
+        let p = f.portable();
+        let mapped = map_included_elements(&p).unwrap();
+        assert_eq!(mapped.origins.len(), 3);
+        assert_eq!(mapped.origins[&p.model.joints[0].id].source_path, Path::new("sub/two.xml"));
+        assert_eq!(mapped.origins[&p.model.actuators[0].id].source_path, Path::new("main.xml"));
+        let json = serde_json::to_string(&mapped).unwrap();
+        assert_eq!(serde_json::from_str::<MjcfProvenance>(&json).unwrap(), mapped);
+    }
 
     #[test]
     fn single_source_maps_unnamed_body_joint_and_actuator() {

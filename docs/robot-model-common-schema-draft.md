@@ -84,3 +84,9 @@ This is not yet a relocatable project package: canonical absolute paths are stor
 `mjcf_provenance::map_named_elements(portable_bundle)` produces a separate `MjcfProvenance` mapping domain UUIDs to relative source path, XML tag, explicit name, and byte offset in the original source. It covers named Body, Joint, Actuator and Tendon elements, including included files. The map can be serialized to JSON and checked against the same portable bundle.
 
 This is **not** an editable XML source mapping: offsets become stale if source text changes. Unnamed bodies/joints/actuators are currently rejected, and source name collisions are rejected rather than guessed. The existing `RobotModel` and portable bundle schemas are unchanged. Future work must use stable source-element identities and handle unnamed elements before enabling edits.
+
+### Single-source unnamed MJCF provenance (opt-in)
+
+`mjcf_provenance::map_single_source_elements` maps Body, Joint, Tendon, and Actuator UUIDs to original element offsets by the same traversal order used in projection. It accepts unnamed Body, Joint and Actuator elements, recording an empty `source_name` for them. It requires exactly one source file and exact equality between the entry XML and `RobotModel.original_xml`; it rejects multi-file includes and changed source. This is read-only and separate from `map_named_elements`.
+
+This ordering-based mapping must **not** be applied to included sources. Source spans through include expansion are required before unnamed multi-file elements can be mapped safely. `validate_against` and `validate_source_locations` currently use the named-element API and are not validators for this opt-in unnamed mapping.

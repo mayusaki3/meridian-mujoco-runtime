@@ -78,3 +78,9 @@ This is not yet a relocatable project package: canonical absolute paths are stor
 `mjcf_portable::PortableMjcfBundle::from_bundle(bundle, source_root)` converts canonical source paths into relative paths rooted at the selected directory. A source outside this root is rejected, not silently copied or rewritten. The serialized snapshot includes the UUID-preserving `RobotModel`, relative entry path, and original source XML files.
 
 `restore_to(destination)` requires a **nonexistent** destination directory, writes the original XML file tree, re-resolves the MJCF includes and checks the expanded XML against the saved model snapshot. It does not re-import or regenerate model IDs. Path components such as `..`, absolute paths and platform prefixes are rejected. Failed restore may leave a partially written destination, so this API is not yet transactional. Original source XML is stored as UTF-8 strings; arbitrary binary assets and external mesh dependencies are not packaged. Element-to-source provenance is a separate future step.
+
+### Read-only MJCF element provenance
+
+`mjcf_provenance::map_named_elements(portable_bundle)` produces a separate `MjcfProvenance` mapping domain UUIDs to relative source path, XML tag, explicit name, and byte offset in the original source. It covers named Body, Joint, Actuator and Tendon elements, including included files. The map can be serialized to JSON and checked against the same portable bundle.
+
+This is **not** an editable XML source mapping: offsets become stale if source text changes. Unnamed bodies/joints/actuators are currently rejected, and source name collisions are rejected rather than guessed. The existing `RobotModel` and portable bundle schemas are unchanged. Future work must use stable source-element identities and handle unnamed elements before enabling edits.

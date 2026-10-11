@@ -66,3 +66,9 @@ This is intentionally **not** a MuJoCo compiler equivalence guarantee. In partic
 ### MJCF default classes and unresolved includes
 
 Static inspection checks duplicate named `<default class="...">` declarations and unknown `class` / `childclass` references in the provided XML document. It does not calculate inherited attribute values or expand includes. `inspect_mjcf_standalone` rejects unresolved `<include>` elements; `inspect_mjcf` remains a partial, read-only inspection API for compatibility. Neither API validates file existence, include cycles, transitive references or preserves an external-file bundle. These require a source-aware resolver and later MuJoCo compiler validation.
+
+### Resolved MJCF to ROBOT-Model bundle
+
+`mjcf_model_bundle::from_mjcf_file(path)` resolves includes, validates the expanded MJCF, projects a new UUID-identified `RobotModel`, and runs `validate_model`. The `MjcfModelBundle` holds the model, canonical entry path and an exact-text map of all source XML files. `RobotModel.original_xml` contains the **expanded snapshot**, whereas `MjcfModelBundle.entry_xml()` returns the unmodified entry file. JSON roundtrip preserves model and element IDs as well as source text. Re-import intentionally creates fresh IDs.
+
+This is not yet a relocatable project package: canonical absolute paths are stored. Nor does it provide edited multi-file export, element-to-source provenance mapping, or MuJoCo compiler-equivalent expansion.

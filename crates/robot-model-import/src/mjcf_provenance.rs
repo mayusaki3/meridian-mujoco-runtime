@@ -216,6 +216,41 @@ pub fn map_included_elements(bundle: &PortableMjcfBundle) -> Result<MjcfProvenan
 }
 
 impl MjcfProvenance {
+    /// Validate saved source-span provenance against the exact original source
+    /// snapshot and its re-expanded XML, including unnamed domain elements.
+    /// This does not reconcile identities after editing source files.
+    pub fn validate_included_elements(&self, bundle: &PortableMjcfBundle) -> Result<(), ProvenanceError> {
+        if self.model_id != bundle.model.model_id {
+            return Err(ProvenanceError::InvalidModelId);
+        }
+        let expected = map_included_elements(bundle)?;
+        if *self != expected {
+            return Err(ProvenanceError::InvalidModelId);
+        }
+        // Verify every stored location against the actual source XML tree,
+        // including unnamed elements (which have no name attribute).
+        for origin in self.origins.values() {
+            let xml = bundle.sources.get(&origin.source_path)
+                .ok_or_else(|| ProvenanceError::InvalidXml(origin.source_path.clone()))?;
+            let doc = roxmltree::Document::parse(xml)
+                .map_err(|_| ProvenanceError::InvalidXml(origin.source_path.clone()))?;
+            let expected_name = if origin.source_name.is_empty() {
+                None
+            } else {
+                Some(origin.source_name.as_str())
+            };
+            let found = doc.descendants().any(|node|
+                node.is_element()
+                && node.range().start == origin.byte_offset
+                && node.tag_name().namespace().is_none()
+                && node.tag_name().name() == origin.element_tag
+                && node.attribute("name") == expected_name
+            );
+            if !found { return Err(ProvenanceError::InvalidModelId); }
+        }
+        Ok(())
+    }
+
 
     /// Verify that each stored byte offset still points to the same named
     /// XML element in the original source. This is a guard, not an edit API.
@@ -270,6 +305,50 @@ mod tests {
     }
     impl Drop for Fixture { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); } }
 
+
+    #[test]
+    fn included_validation_accepts_unnamed_json_roundtrip() {
+        let f = Fixture::new();
+        f.put("main.xml", r#"<mujoco><include file="parts.xml"/><actuator><motor/></actuator></mujoco>"#);
+        f.put("parts.xml", r#"<mujocoinclude><worldbody><body><joint/></body></worldbody></mujocoinclude>"#);
+        let portable = f.portable();
+        let mapped = map_included_elements(&portable).unwrap();
+        let json = serde_json::to_string(&mapped).unwrap();
+        let restored: MjcfProvenance = serde_json::from_str(&json).unwrap();
+        restored.validate_included_elements(&portable).unwrap();
+    }
+
+    #[test]
+    fn included_validation_rejects_changed_uuid_and_offset() {
+        let f = Fixture::new();
+        f.put("main.xml", r#"<mujoco><worldbody><body><joint/></body></worldbody></mujoco>"#);
+        let portable = f.portable();
+        let mapped = map_included_elements(&portable).unwrap();
+        let mut wrong_id = mapped.clone();
+        let joint_id = &portable.model.joints[0].id;
+        let joint = wrong_id.origins.remove(joint_id).unwrap();
+        wrong_id.origins.insert("incorrect-uuid".into(), joint);
+        assert_eq!(wrong_id.validate_included_elements(&portable), Err(ProvenanceError::InvalidModelId));
+        let mut wrong_offset = mapped.clone();
+        wrong_offset.origins.get_mut(joint_id).unwrap().byte_offset += 1;
+        assert_eq!(wrong_offset.validate_included_elements(&portable), Err(ProvenanceError::InvalidModelId));
+        let mut wrong_model = mapped;
+        wrong_model.model_id = "incorrect-model".into();
+        assert_eq!(wrong_model.validate_included_elements(&portable), Err(ProvenanceError::InvalidModelId));
+    }
+
+    #[test]
+    fn included_validation_rejects_changed_original_source() {
+        let f = Fixture::new();
+        f.put("main.xml", r#"<mujoco><include file="parts.xml"/></mujoco>"#);
+        f.put("parts.xml", r#"<mujocoinclude><worldbody><body><joint/></body></worldbody></mujocoinclude>"#);
+        let portable = f.portable();
+        let mapped = map_included_elements(&portable).unwrap();
+        let mut changed = portable.clone();
+        changed.sources.insert(PathBuf::from("parts.xml"),
+            r#"<mujocoinclude><worldbody> <body><joint/></body></worldbody></mujocoinclude>"#.into());
+        assert!(mapped.validate_included_elements(&changed).is_err());
+    }
 
     #[test]
     fn included_unnamed_elements_map_to_original_files() {

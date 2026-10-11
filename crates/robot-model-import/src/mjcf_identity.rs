@@ -25,10 +25,10 @@ pub fn plan_named_identity_reuse(old: &RobotModel, new: &RobotModel) -> Result<I
     if old.source_format != SourceFormat::Mjcf || new.source_format != SourceFormat::Mjcf {
         return Err(ReconcileError::NotMjcf);
     }
-    let all_ids = |m: &RobotModel| m.bodies.iter().map(|b| &b.id)
-        .chain(m.joints.iter().map(|j| &j.id))
-        .chain(m.tendons.iter().map(|t| &t.id))
-        .chain(m.actuators.iter().map(|a| &a.id)).collect::<Vec<_>>();
+    let all_ids = |m: &RobotModel| m.bodies.iter().map(|b| b.id.clone())
+        .chain(m.joints.iter().map(|j| j.id.clone()))
+        .chain(m.tendons.iter().map(|t| t.id.clone()))
+        .chain(m.actuators.iter().map(|a| a.id.clone())).collect::<Vec<_>>();
     for model in [old, new] {
         let ids = all_ids(model);
         if ids.iter().collect::<HashSet<_>>().len() != ids.len() {
@@ -67,7 +67,7 @@ pub fn plan_named_identity_reuse(old: &RobotModel, new: &RobotModel) -> Result<I
         } else { unresolved.push(b.id.clone()); }
     }
     let old_joints: HashMap<_, _> = old.joints.iter().filter_map(|j| j.name.as_deref().map(|n| (n,j))).collect();
-    let count_joints = |m: &RobotModel| m.joints.iter().filter_map(|j| j.name.as_deref())
+    let count_joints = |m: &RobotModel| m.joints.iter().filter_map(|j| j.name.clone())
         .fold(HashMap::new(), |mut counts, name| { *counts.entry(name).or_insert(0usize) += 1; counts });
     let oc = count_joints(old);
     let nc = count_joints(new);
@@ -83,7 +83,7 @@ pub fn plan_named_identity_reuse(old: &RobotModel, new: &RobotModel) -> Result<I
     // transmission target, so defer actuator reconciliation to a later phase.
     let old_tendons: HashMap<_, _> = old.tendons.iter().map(|t| (t.name.as_str(),t)).collect();
     let count_tendons = |m: &RobotModel| m.tendons.iter().fold(HashMap::new(), |mut counts, t| {
-        *counts.entry(t.name.as_str()).or_insert(0usize) += 1; counts
+        *counts.entry(t.name.clone()).or_insert(0usize) += 1; counts
     });
     let ot = count_tendons(old);
     let nt = count_tendons(new);

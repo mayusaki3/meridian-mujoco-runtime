@@ -72,3 +72,9 @@ Static inspection checks duplicate named `<default class="...">` declarations an
 `mjcf_model_bundle::from_mjcf_file(path)` resolves includes, validates the expanded MJCF, projects a new UUID-identified `RobotModel`, and runs `validate_model`. The `MjcfModelBundle` holds the model, canonical entry path and an exact-text map of all source XML files. `RobotModel.original_xml` contains the **expanded snapshot**, whereas `MjcfModelBundle.entry_xml()` returns the unmodified entry file. JSON roundtrip preserves model and element IDs as well as source text. Re-import intentionally creates fresh IDs.
 
 This is not yet a relocatable project package: canonical absolute paths are stored. Nor does it provide edited multi-file export, element-to-source provenance mapping, or MuJoCo compiler-equivalent expansion.
+
+### Portable MJCF source snapshot (opt-in)
+
+`mjcf_portable::PortableMjcfBundle::from_bundle(bundle, source_root)` converts canonical source paths into relative paths rooted at the selected directory. A source outside this root is rejected, not silently copied or rewritten. The serialized snapshot includes the UUID-preserving `RobotModel`, relative entry path, and original source XML files.
+
+`restore_to(destination)` requires a **nonexistent** destination directory, writes the original XML file tree, re-resolves the MJCF includes and checks the expanded XML against the saved model snapshot. It does not re-import or regenerate model IDs. Path components such as `..`, absolute paths and platform prefixes are rejected. Failed restore may leave a partially written destination, so this API is not yet transactional. Original source XML is stored as UTF-8 strings; arbitrary binary assets and external mesh dependencies are not packaged. Element-to-source provenance is a separate future step.

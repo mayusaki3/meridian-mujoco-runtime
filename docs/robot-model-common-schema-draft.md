@@ -90,3 +90,9 @@ This is **not** an editable XML source mapping: offsets become stale if source t
 `mjcf_provenance::map_single_source_elements` maps Body, Joint, Tendon, and Actuator UUIDs to original element offsets by the same traversal order used in projection. It accepts unnamed Body, Joint and Actuator elements, recording an empty `source_name` for them. It requires exactly one source file and exact equality between the entry XML and `RobotModel.original_xml`; it rejects multi-file includes and changed source. This is read-only and separate from `map_named_elements`.
 
 This ordering-based mapping must **not** be applied to included sources. Source spans through include expansion are required before unnamed multi-file elements can be mapped safely. `validate_against` and `validate_source_locations` currently use the named-element API and are not validators for this opt-in unnamed mapping.
+
+### Nested MJCF include source spans (opt-in)
+
+`mjcf_source_spans::source_byte_map` reconstructs the existing include expansion and records an original relative file path and byte offset for each expanded XML byte. It requires exact equality with the saved `RobotModel.original_xml`. `mjcf_provenance::map_included_elements` then associates projected Body, Joint, Tendon and Actuator UUIDs with the original opening tag, including unnamed elements in nested includes. This is read-only; original files and the existing bundle schema are unchanged.
+
+The span-based map is reconstructed from the stored source snapshot. Its offsets are not durable identifiers across source edits, and `MjcfProvenance::validate_against` remains the older named-element validator; do not use it to validate span-based unnamed mappings. Future work: dedicated validation of span-based provenance and explicit stable identity/reconciliation across source edits.

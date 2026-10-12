@@ -1,5 +1,6 @@
 mod urdf_io;
 mod runtime_project;
+mod mjcf_project;
 #[cfg(test)]
 mod urdf_fixture_tests;
 

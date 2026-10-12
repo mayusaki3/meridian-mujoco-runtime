@@ -110,3 +110,12 @@ The method validates consistency with the **current snapshot**, not authenticity
 ### MJCF identity planning (phase 2)
 
 Body reconciliation is parent-first: each named body may reuse an existing UUID only when its own unique name matches and its parent has already been safely reconciled to the previous parent UUID. This transitively rejects descendants of moved or unresolved ancestors. Named actuators may reuse UUIDs only when their names are unique in both models, actuator kinds match, and their transmission targets match: joint/tendon targets must already have a reuse mapping, and site targets must retain the same site name. Unnamed actuators and unspecified targets remain unresolved. Site name equality does not yet prove site identity across structural edits; callers must treat the result as a conservative candidate plan, not a completed source migration.
+
+
+### MJCF identity plan application (phase 3)
+
+`mjcf_identity::apply_identity_plan(old, new, plan)` validates both models, recomputes the authoritative plan, rejects forged or colliding mappings, and returns a cloned new model with matched UUIDs and all modeled body/joint/actuator references remapped. Neither input is mutated. Unresolved elements retain their imported UUIDs; raw XML remains unchanged. This does not automatically rewrite provenance snapshots or external UUID references.
+
+### MJCF reimport integration (phase 4)
+
+`mjcf_identity::reimport_mjcf_with_identity(previous, xml)` imports new standalone MJCF XML, plans conservative named-identity reuse, and applies the validated plan in one fallible operation. It returns `ReimportResult { model, plan }`, retaining the previous `model_id` on success, preserving the newly imported XML exactly, and leaving unmatched elements with fresh UUIDs. Failure returns an error without mutating `previous`. This is a ROBOT-Model-level API; it does not yet update multi-file portable bundles, provenance records, runtime project storage, or external references. Consumers must handle `plan.unresolved` explicitly.

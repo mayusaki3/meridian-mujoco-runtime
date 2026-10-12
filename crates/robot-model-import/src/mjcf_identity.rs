@@ -128,10 +128,107 @@ pub fn plan_named_identity_reuse(old: &RobotModel, new: &RobotModel) -> Result<I
     Ok(IdentityPlan { reuse, unresolved })
 }
 
+/// Errors while validating or applying an identity plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ApplyIdentityError {
+    InvalidModel(crate::integrity::IntegrityError),
+    InvalidPlan,
+}
+
+/// Validate and apply a reconciliation plan atomically, returning a new model.
+/// Unresolved elements retain their freshly imported UUIDs.
+pub fn apply_identity_plan(
+    old: &RobotModel,
+    new: &RobotModel,
+    plan: &IdentityPlan,
+) -> Result<RobotModel, ApplyIdentityError> {
+    use crate::integrity::validate_model;
+    use crate::model::SourceFormat;
+    validate_model(old).map_err(ApplyIdentityError::InvalidModel)?;
+    validate_model(new).map_err(ApplyIdentityError::InvalidModel)?;
+    if old.source_format != SourceFormat::Mjcf || new.source_format != SourceFormat::Mjcf {
+        return Err(ApplyIdentityError::InvalidPlan);
+    }
+    // Recompute the authoritative plan: a caller cannot forge a match that
+    // bypasses name, ancestry, kind or transmission-target checks.
+    let expected = plan_named_identity_reuse(old, new)
+        .map_err(|_| ApplyIdentityError::InvalidPlan)?;
+    if &expected != plan { return Err(ApplyIdentityError::InvalidPlan); }
+
+    let old_ids: HashSet<&str> = old.bodies.iter().map(|x| x.id.as_str())
+        .chain(old.joints.iter().map(|x| x.id.as_str()))
+        .chain(old.tendons.iter().map(|x| x.id.as_str()))
+        .chain(old.actuators.iter().map(|x| x.id.as_str())).collect();
+    let mut resulting_ids = HashSet::new();
+    for id in new.bodies.iter().map(|x| &x.id)
+        .chain(new.joints.iter().map(|x| &x.id))
+        .chain(new.tendons.iter().map(|x| &x.id))
+        .chain(new.actuators.iter().map(|x| &x.id)) {
+        let result = plan.reuse.get(id).unwrap_or(id);
+        if !resulting_ids.insert(result.as_str()) { return Err(ApplyIdentityError::InvalidPlan); }
+        // An unresolved new UUID must not accidentally alias an old identity.
+        if !plan.reuse.contains_key(id) && old_ids.contains(id.as_str()) {
+            return Err(ApplyIdentityError::InvalidPlan);
+        }
+    }
+
+    let remap = |id: &str| plan.reuse.get(id).cloned().unwrap_or_else(|| id.to_owned());
+    let mut result = new.clone();
+    for b in &mut result.bodies {
+        b.parent_id = b.parent_id.as_deref().map(&remap);
+        b.id = remap(&b.id);
+    }
+    for j in &mut result.joints {
+        j.parent_body_id = j.parent_body_id.as_deref().map(&remap);
+        j.child_body_id = remap(&j.child_body_id);
+        j.id = remap(&j.id);
+    }
+    for t in &mut result.tendons { t.id = remap(&t.id); }
+    for a in &mut result.actuators {
+        a.target = match &a.target {
+            TransmissionTarget::Joint(id) => TransmissionTarget::Joint(remap(id)),
+            TransmissionTarget::Tendon(id) => TransmissionTarget::Tendon(remap(id)),
+            other => other.clone(),
+        };
+        a.id = remap(&a.id);
+    }
+    validate_model(&result).map_err(ApplyIdentityError::InvalidModel)?;
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::from_mjcf;
+    #[test]
+    fn applying_plan_preserves_references_and_source() {
+        let xml = r#"<mujoco><worldbody><body name="b"><joint name="j"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#;
+        let old = from_mjcf(xml).unwrap();
+        let new = from_mjcf(xml).unwrap();
+        let plan = plan_named_identity_reuse(&old, &new).unwrap();
+        let applied = apply_identity_plan(&old, &new, &plan).unwrap();
+        assert_eq!(applied.bodies[0].id, old.bodies[0].id);
+        assert_eq!(applied.joints[0].id, old.joints[0].id);
+        assert_eq!(applied.actuators[0].id, old.actuators[0].id);
+        assert_eq!(applied.joints[0].child_body_id, old.bodies[0].id);
+        assert_eq!(applied.actuators[0].target, old.actuators[0].target);
+        assert_eq!(applied.original_xml, new.original_xml);
+        assert_eq!(new.original_xml, xml);
+    }
+    #[test]
+    fn applying_plan_rejects_forgery_and_collision_without_mutation() {
+        let xml = r#"<mujoco><worldbody><body name="b"><joint name="j"/></body></worldbody></mujoco>"#;
+        let old = from_mjcf(xml).unwrap();
+        let new = from_mjcf(xml).unwrap();
+        let untouched = new.clone();
+        let mut plan = plan_named_identity_reuse(&old, &new).unwrap();
+        plan.reuse.insert(new.joints[0].id.clone(), old.bodies[0].id.clone());
+        assert_eq!(apply_identity_plan(&old, &new, &plan), Err(ApplyIdentityError::InvalidPlan));
+        assert_eq!(new, untouched);
+        let mut plan = plan_named_identity_reuse(&old, &new).unwrap();
+        plan.unresolved.push(new.bodies[0].id.clone());
+        assert_eq!(apply_identity_plan(&old, &new, &plan), Err(ApplyIdentityError::InvalidPlan));
+    }
     #[test]
     fn ancestor_change_blocks_descendant_reuse() {
         let a = from_mjcf(r#"<mujoco><worldbody><body name="a"><body name="middle"><body name="leaf"/></body></body><body name="b"/></worldbody></mujoco>"#).unwrap();

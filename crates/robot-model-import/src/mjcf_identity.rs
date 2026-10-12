@@ -196,10 +196,84 @@ pub fn apply_identity_plan(
     Ok(result)
 }
 
+/// Outcome of reimporting an MJCF snapshot while preserving safe identities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReimportResult {
+    pub model: RobotModel,
+    pub plan: IdentityPlan,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReimportError {
+    Import(crate::model::ModelImportError),
+    Reconcile(ReconcileError),
+    Apply(ApplyIdentityError),
+}
+
+/// Reimport MJCF source into an existing MJCF model without modifying it.
+/// The existing model ID is retained; unmatched elements keep fresh IDs.
+/// On any failure, the previous model remains unchanged.
+pub fn reimport_mjcf_with_identity(
+    previous: &RobotModel,
+    xml: &str,
+) -> Result<ReimportResult, ReimportError> {
+    use crate::model::SourceFormat;
+    if previous.source_format != SourceFormat::Mjcf {
+        return Err(ReimportError::Reconcile(ReconcileError::NotMjcf));
+    }
+    let imported = crate::model::from_mjcf(xml).map_err(ReimportError::Import)?;
+    let plan = plan_named_identity_reuse(previous, &imported)
+        .map_err(ReimportError::Reconcile)?;
+    let mut model = apply_identity_plan(previous, &imported, &plan)
+        .map_err(ReimportError::Apply)?;
+    model.model_id = previous.model_id.clone();
+    Ok(ReimportResult { model, plan })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::from_mjcf;
+    #[test]
+    fn reimport_keeps_model_and_matched_ids_with_new_xml() {
+        let before = r#"<mujoco><worldbody><body name="b"><joint name="j"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#;
+        let after = r#"<mujoco> <worldbody><body name="b"><joint name="j"/></body><body name="added"/></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#;
+        let previous = from_mjcf(before).unwrap();
+        let outcome = reimport_mjcf_with_identity(&previous, after).unwrap();
+        assert_eq!(outcome.model.model_id, previous.model_id);
+        assert_eq!(outcome.model.original_xml, after);
+        assert_eq!(outcome.model.bodies[0].id, previous.bodies[0].id);
+        assert_eq!(outcome.model.joints[0].id, previous.joints[0].id);
+        assert_eq!(outcome.model.actuators[0].id, previous.actuators[0].id);
+        assert_eq!(outcome.model.joints[0].child_body_id, previous.bodies[0].id);
+        assert_eq!(outcome.model.actuators[0].target, previous.actuators[0].target);
+        assert_eq!(outcome.plan.reuse.len(), 3);
+        assert_eq!(outcome.plan.unresolved, vec![outcome.model.bodies[1].id.clone()]);
+        assert_ne!(outcome.model.bodies[1].id, previous.bodies[0].id);
+        crate::integrity::validate_model(&outcome.model).unwrap();
+    }
+    #[test]
+    fn reimport_rejects_invalid_xml_and_non_mjcf_without_changing_previous() {
+        let previous = from_mjcf(r#"<mujoco><worldbody><body name="b"/></worldbody></mujoco>"#).unwrap();
+        let snapshot = previous.clone();
+        assert!(matches!(reimport_mjcf_with_identity(&previous, "<mujoco>"), Err(ReimportError::Import(_))));
+        assert_eq!(previous, snapshot);
+        let urdf = crate::model::from_urdf(r#"<robot name="r"><link name="base"/></robot>"#).unwrap();
+        assert_eq!(reimport_mjcf_with_identity(&urdf, &previous.original_xml), Err(ReimportError::Reconcile(ReconcileError::NotMjcf)));
+    }
+    #[test]
+    fn reimport_keeps_new_identity_for_changed_joint_and_actuator() {
+        let before = r#"<mujoco><worldbody><body name="b"><joint name="j"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#;
+        let after = r#"<mujoco><worldbody><body name="b"><joint name="j" type="slide"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#;
+        let previous = from_mjcf(before).unwrap();
+        let outcome = reimport_mjcf_with_identity(&previous, after).unwrap();
+        assert_eq!(outcome.model.bodies[0].id, previous.bodies[0].id);
+        assert_ne!(outcome.model.joints[0].id, previous.joints[0].id);
+        assert_ne!(outcome.model.actuators[0].id, previous.actuators[0].id);
+        assert_eq!(outcome.plan.reuse.len(), 1);
+        assert_eq!(outcome.plan.unresolved.len(), 2);
+        assert_eq!(outcome.model.actuators[0].target, TransmissionTarget::Joint(outcome.model.joints[0].id.clone()));
+    }
     #[test]
     fn applying_plan_preserves_references_and_source() {
         let xml = r#"<mujoco><worldbody><body name="b"><joint name="j"/></body></worldbody><actuator><motor name="drive" joint="j"/></actuator></mujoco>"#;

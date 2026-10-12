@@ -68,7 +68,7 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
         &mut self,
         context: &ProjectContext,
     ) -> Result<ProjectDataConsistency, Self::Error> {
-        match Self::load_source(context) {
+        match Self::load_source(context).and_then(|_| crate::mjcf_project::load_snapshot(context).map(|_| ())) {
             Ok(_) => Ok(ProjectDataConsistency::Consistent),
             Err(error) => Ok(ProjectDataConsistency::Inconsistent {
                 reason: Some(error.to_string()),
@@ -86,6 +86,7 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
     ) -> Result<ApplicationSaveResult, Self::Error> {
         fs::create_dir_all(context.application_directory())?;
         Self::load_source(context)?;
+        crate::mjcf_project::load_snapshot(context)?;
         Ok(ApplicationSaveResult { data_version: Some(DATA_VERSION.into()) })
     }
 
@@ -99,6 +100,9 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
             if let Some(imported) = Self::load_source(source)? {
                 Self::import_source(destination, imported.unchanged_xml())?;
             }
+        }
+        if let Some(snapshot) = crate::mjcf_project::load_snapshot(source.unwrap_or(destination))? {
+            crate::mjcf_project::save_snapshot(destination, &snapshot)?;
         }
         self.save_project_data(destination, save_id)
     }

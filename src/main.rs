@@ -70,8 +70,8 @@ fn main() {
             Ok(()) => workflow_ide_framework::tracing::info!(target: "meridian::urdf", file = %path.display(), message = %workflow_ide_framework::localization::text("meridian.urdf.import.ok")),
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", file = %path.display(), error = %error, message = %workflow_ide_framework::localization::text("meridian.urdf.import.failed")),
         }
-    }))
-    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.urdf.import"))
+    }).label_key("meridian.menu.urdf.import"))
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.import"))
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
         let root = export_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
@@ -97,8 +97,8 @@ fn main() {
             Ok(()) => workflow_ide_framework::tracing::info!(target: "meridian::urdf", file = %path.display(), message = %workflow_ide_framework::localization::text("meridian.urdf.export.ok")),
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", error = %error, message = %workflow_ide_framework::localization::text("meridian.urdf.export.failed")),
         }
-    }))
-    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.urdf.export"))
+    }).label_key("meridian.menu.urdf.export"))
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.export"))
     .command(CommandDefinition::new("runtime.mjcf.import", "MJCFインポート...", move || {
         let root = mjcf_import_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
@@ -128,8 +128,8 @@ fn main() {
             Ok(snapshot) => workflow_ide_framework::tracing::info!(target: "meridian::mjcf", file = %path.display(), body = snapshot.bundle.model.bodies.len(), joint = snapshot.bundle.model.joints.len(), actuator = snapshot.bundle.model.actuators.len(), message = %workflow_ide_framework::localization::text("meridian.mjcf.import.ok")),
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::mjcf", entry_file = %path.display(), error = %error, message = %workflow_ide_framework::localization::text("meridian.mjcf.import.failed")),
         }
-    }))
-    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.mjcf.import"))
+    }).label_key("meridian.menu.mjcf.import"))
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.mjcf.import"))
     .command(CommandDefinition::new("runtime.mjcf.reimport", "MJCF再インポート...", move || {
         let root = mjcf_reimport_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
@@ -160,8 +160,8 @@ fn main() {
             Ok(result) => workflow_ide_framework::tracing::info!(target: "meridian::mjcf", file = %path.display(), uuid_reused = result.plan.reuse.len(), unresolved = result.plan.unresolved.len(), message = %workflow_ide_framework::localization::text("meridian.mjcf.reimport.ok")),
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::mjcf", entry_file = %path.display(), error = %error, message = %workflow_ide_framework::localization::text("meridian.mjcf.reimport.failed")),
         }
-    }))
-    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.mjcf.reimport"))
+    }).label_key("meridian.menu.mjcf.reimport"))
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.mjcf.reimport"))
     .run()
     .expect("failed to start workflow IDE framework");
 }

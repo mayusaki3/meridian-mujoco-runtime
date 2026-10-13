@@ -1,7 +1,7 @@
 //! Regression tests for checked-in URDF fixtures and project roundtrips.
 #![cfg(test)]
 use crate::{runtime_project::RuntimeProjectAdapter, urdf_io};
-use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 use workflow_ide_framework::{project::ProjectContext, project_adapter::ApplicationProjectAdapter};
 
 const VALID: &[(&str, &str)] = &[

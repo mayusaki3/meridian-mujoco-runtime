@@ -33,7 +33,7 @@ fn main() {
         "meridian-mujoco-runtime",
         "Meridian MuJoCo Runtime",
     )
-    .localization_resources("resources/locales")
+    .localization_resources("resources/meridian-locales")
     .project_adapter(runtime_project::RuntimeProjectAdapter)
     .panel(PanelDefinition::new("project", "meridian.panel.project", PanelKind::StandardUi))
     .panel(PanelDefinition::new("logs", "meridian.panel.logs", PanelKind::StandardUi))

@@ -40,7 +40,7 @@ fn main() {
     .command(CommandDefinition::new("runtime.urdf.import", "URDFインポート...", move || {
         let root = import_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
-            eprintln!("URDFインポート: プロジェクトを開いてください");
+            workflow_ide_framework::tracing::warn!(target: "meridian::urdf", "URDFインポート: プロジェクトを開いてください");
             return;
         };
         let Some(path) = rfd::FileDialog::new().add_filter("URDF", &["urdf"]).pick_file() else {
@@ -50,25 +50,25 @@ fn main() {
             runtime_project::RuntimeProjectAdapter::import_source(&ProjectContext::new(root), &source)
         });
         match result {
-            Ok(()) => eprintln!("URDFインポート完了: {}", path.display()),
-            Err(error) => eprintln!("URDFインポート失敗: {error}"),
+            Ok(()) => workflow_ide_framework::tracing::info!(target: "meridian::urdf", file = %path.display(), "URDFインポート完了"),
+            Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", file = %path.display(), error = %error, "URDFインポート失敗"),
         }
     }))
     .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.urdf.import"))
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
         let root = export_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
-            eprintln!("URDFエクスポート: プロジェクトを開いてください");
+            workflow_ide_framework::tracing::warn!(target: "meridian::urdf", "URDFエクスポート: プロジェクトを開いてください");
             return;
         };
         let imported = match runtime_project::RuntimeProjectAdapter::load_source(&ProjectContext::new(root)) {
             Ok(Some(model)) => model,
             Ok(None) => {
-                eprintln!("URDFエクスポート: インポート済みURDFがありません");
+                workflow_ide_framework::tracing::warn!(target: "meridian::urdf", "URDFエクスポート: インポート済みURDFがありません");
                 return;
             }
             Err(error) => {
-                eprintln!("URDFエクスポート失敗: {error}");
+                workflow_ide_framework::tracing::error!(target: "meridian::urdf", error = %error, "URDFエクスポート失敗");
                 return;
             }
         };
@@ -77,26 +77,26 @@ fn main() {
             .set_file_name("robot.urdf")
             .save_file() else { return; };
         match urdf_io::export_unchanged_urdf(&imported, &path) {
-            Ok(()) => eprintln!("URDFエクスポート完了: {}", path.display()),
-            Err(error) => eprintln!("URDFエクスポート失敗: {error}"),
+            Ok(()) => workflow_ide_framework::tracing::info!(target: "meridian::urdf", file = %path.display(), "URDFエクスポート完了"),
+            Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", error = %error, "URDFエクスポート失敗"),
         }
     }))
     .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.urdf.export"))
     .command(CommandDefinition::new("runtime.mjcf.import", "MJCFインポート...", move || {
         let root = mjcf_import_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
-            eprintln!("MJCFインポート: プロジェクトを開いてください");
+            workflow_ide_framework::tracing::warn!(target: "meridian::mjcf", "MJCFインポート: プロジェクトを開いてください");
             return;
         };
         let context = ProjectContext::new(root);
         match mjcf_project::load_snapshot(&context) {
             Ok(Some(_)) => {
-                eprintln!("MJCFインポート: 既存MJCFがあります。MJCF再インポートを使用してください");
+                workflow_ide_framework::tracing::warn!(target: "meridian::mjcf", "MJCFインポート: 既存MJCFがあります。MJCF再インポートを使用してください");
                 return;
             }
             Ok(None) => {}
             Err(error) => {
-                eprintln!("MJCFインポート: 保存済みデータを確認できません: {error}");
+                workflow_ide_framework::tracing::error!(target: "meridian::mjcf", error = %error, "MJCFインポート: 保存済みデータを確認できません");
                 return;
             }
         }
@@ -104,36 +104,30 @@ fn main() {
             return;
         };
         let Some(source_root) = path.parent() else {
-            eprintln!("MJCFインポート: ソースルートを特定できません");
+            workflow_ide_framework::tracing::error!(target: "meridian::mjcf", file = %path.display(), "MJCFインポート: ソースルートを特定できません");
             return;
         };
         match mjcf_project::import_snapshot(&context, &path, source_root) {
-            Ok(snapshot) => eprintln!(
-                "MJCFインポート完了: {} (body={}, joint={}, actuator={})",
-                path.display(),
-                snapshot.bundle.model.bodies.len(),
-                snapshot.bundle.model.joints.len(),
-                snapshot.bundle.model.actuators.len()
-            ),
-            Err(error) => eprintln!("MJCFインポート失敗\nエントリーファイル: {}\nエラー: {error}", path.display()),
+            Ok(snapshot) => workflow_ide_framework::tracing::info!(target: "meridian::mjcf", file = %path.display(), body = snapshot.bundle.model.bodies.len(), joint = snapshot.bundle.model.joints.len(), actuator = snapshot.bundle.model.actuators.len(), "MJCFインポート完了"),
+            Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::mjcf", entry_file = %path.display(), error = %error, "MJCFインポート失敗"),
         }
     }))
     .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.import"))
     .command(CommandDefinition::new("runtime.mjcf.reimport", "MJCF再インポート...", move || {
         let root = mjcf_reimport_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
-            eprintln!("MJCF再インポート: プロジェクトを開いてください");
+            workflow_ide_framework::tracing::warn!(target: "meridian::mjcf", "MJCF再インポート: プロジェクトを開いてください");
             return;
         };
         let context = ProjectContext::new(root);
         let previous = match mjcf_project::load_snapshot(&context) {
             Ok(Some(snapshot)) => snapshot,
             Ok(None) => {
-                eprintln!("MJCF再インポート: インポート済みMJCFがありません");
+                workflow_ide_framework::tracing::warn!(target: "meridian::mjcf", "MJCF再インポート: インポート済みMJCFがありません");
                 return;
             }
             Err(error) => {
-                eprintln!("MJCF再インポート: 保存済みデータを読み込めません: {error}");
+                workflow_ide_framework::tracing::error!(target: "meridian::mjcf", error = %error, "MJCF再インポート: 保存済みデータを読み込めません");
                 return;
             }
         };
@@ -142,15 +136,12 @@ fn main() {
             .set_file_name(previous.bundle.entry_path.file_name().unwrap_or_default().to_string_lossy().as_ref())
             .pick_file() else { return; };
         let Some(source_root) = path.parent() else {
-            eprintln!("MJCF再インポート: ソースルートを特定できません");
+            workflow_ide_framework::tracing::error!(target: "meridian::mjcf", file = %path.display(), "MJCF再インポート: ソースルートを特定できません");
             return;
         };
         match mjcf_project::reimport_snapshot(&context, &path, source_root) {
-            Ok(result) => eprintln!(
-                "MJCF再インポート完了: {} (UUID継承={}, 新規・未照合={})",
-                path.display(), result.plan.reuse.len(), result.plan.unresolved.len()
-            ),
-            Err(error) => eprintln!("MJCF再インポート失敗\nエントリーファイル: {}\nエラー: {error}", path.display()),
+            Ok(result) => workflow_ide_framework::tracing::info!(target: "meridian::mjcf", file = %path.display(), uuid_reused = result.plan.reuse.len(), unresolved = result.plan.unresolved.len(), "MJCF再インポート完了"),
+            Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::mjcf", entry_file = %path.display(), error = %error, "MJCF再インポート失敗"),
         }
     }))
     .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.reimport"))

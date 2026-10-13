@@ -1,0 +1,9 @@
+locale = "ja-JP"
+name = "日本語"
+
+[strings]
+"meridian.panel.project" = "プロジェクト"
+"meridian.panel.logs" = "ログ"
+"meridian.error.occurred" = "エラーが発生しました。"
+"meridian.error.code" = "コード"
+"meridian.error.details" = "詳細"

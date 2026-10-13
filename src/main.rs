@@ -16,6 +16,8 @@ fn main() {
     let import_project = Arc::clone(&current_project);
     let export_project = Arc::clone(&current_project);
     let event_project = Arc::clone(&current_project);
+    let mjcf_import_project = Arc::clone(&current_project);
+    let mjcf_reimport_project = Arc::clone(&current_project);
 
     workflow_ide_framework::Application::new(
         "meridian-mujoco-runtime",
@@ -80,6 +82,78 @@ fn main() {
         }
     }))
     .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.urdf.export"))
+    .command(CommandDefinition::new("runtime.mjcf.import", "MJCFインポート...", move || {
+        let root = mjcf_import_project.lock().ok().and_then(|active| active.clone());
+        let Some(root) = root else {
+            eprintln!("MJCFインポート: プロジェクトを開いてください");
+            return;
+        };
+        let context = ProjectContext::new(root);
+        match mjcf_project::load_snapshot(&context) {
+            Ok(Some(_)) => {
+                eprintln!("MJCFインポート: 既存MJCFがあります。MJCF再インポートを使用してください");
+                return;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("MJCFインポート: 保存済みデータを確認できません: {error}");
+                return;
+            }
+        }
+        let Some(path) = rfd::FileDialog::new().add_filter("MJCF", &["xml", "mjcf"]).pick_file() else {
+            return;
+        };
+        let Some(source_root) = path.parent() else {
+            eprintln!("MJCFインポート: ソースルートを特定できません");
+            return;
+        };
+        match mjcf_project::import_snapshot(&context, &path, source_root) {
+            Ok(snapshot) => eprintln!(
+                "MJCFインポート完了: {} (body={}, joint={}, actuator={})",
+                path.display(),
+                snapshot.bundle.model.bodies.len(),
+                snapshot.bundle.model.joints.len(),
+                snapshot.bundle.model.actuators.len()
+            ),
+            Err(error) => eprintln!("MJCFインポート失敗: {error}"),
+        }
+    }))
+    .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.import"))
+    .command(CommandDefinition::new("runtime.mjcf.reimport", "MJCF再インポート...", move || {
+        let root = mjcf_reimport_project.lock().ok().and_then(|active| active.clone());
+        let Some(root) = root else {
+            eprintln!("MJCF再インポート: プロジェクトを開いてください");
+            return;
+        };
+        let context = ProjectContext::new(root);
+        let previous = match mjcf_project::load_snapshot(&context) {
+            Ok(Some(snapshot)) => snapshot,
+            Ok(None) => {
+                eprintln!("MJCF再インポート: インポート済みMJCFがありません");
+                return;
+            }
+            Err(error) => {
+                eprintln!("MJCF再インポート: 保存済みデータを読み込めません: {error}");
+                return;
+            }
+        };
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("MJCF", &["xml", "mjcf"])
+            .set_file_name(previous.bundle.entry_path.file_name().unwrap_or_default().to_string_lossy().as_ref())
+            .pick_file() else { return; };
+        let Some(source_root) = path.parent() else {
+            eprintln!("MJCF再インポート: ソースルートを特定できません");
+            return;
+        };
+        match mjcf_project::reimport_snapshot(&context, &path, source_root) {
+            Ok(result) => eprintln!(
+                "MJCF再インポート完了: {} (UUID継承={}, 新規・未照合={})",
+                path.display(), result.plan.reuse.len(), result.plan.unresolved.len()
+            ),
+            Err(error) => eprintln!("MJCF再インポート失敗: {error}"),
+        }
+    }))
+    .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.reimport"))
     .run()
     .expect("failed to start workflow IDE framework");
 }

@@ -153,3 +153,7 @@ Use files from `tests/fixtures/mjcf-regression/` in the repository checkout:
 ### MJCF import error-path reporting (Phase 7 follow-up)
 
 The GUI command now prints the selected entry file path for both import and reimport failures. Verify with `tests/fixtures/mjcf-regression/invalid/03_missing_actuator_target.xml`: the error should include `エントリーファイル:` followed by the selected file and `UnknownActuatorTarget`. This is **entry-file attribution only**; identifying the actual nested `<include>` source and line/column for semantic inspection failures remains an open improvement. The current UI reports via stderr, not an in-app error dialog.
+
+### Framework logging integration (Phase 7 follow-up)
+
+URDF/MJCF import, export, and reimport command events use `workflow_ide_framework::tracing` rather than direct `eprintln!`. Log targets are `meridian::urdf` and `meridian::mjcf`. Successful operations are INFO, user precondition failures WARN, and processing errors ERROR. Selected entry paths, errors, model element counts, and UUID reconciliation counts are structured fields. Verify in the framework log viewer and console: entries should include timestamp, level, and target. The log format is now one-line structured output; the earlier multi-line `エントリーファイル:` text is replaced by the `entry_file` field. This does not yet add user-facing dialogs or nested-include error provenance.

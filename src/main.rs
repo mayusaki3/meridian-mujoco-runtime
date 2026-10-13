@@ -71,7 +71,7 @@ fn main() {
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", file = %path.display(), error = %error, "URDFインポート失敗"),
         }
     }))
-    .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.urdf.import"))
+    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.urdf.import"))
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
         let root = export_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
@@ -98,7 +98,7 @@ fn main() {
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", error = %error, "URDFエクスポート失敗"),
         }
     }))
-    .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.urdf.export"))
+    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.urdf.export"))
     .command(CommandDefinition::new("runtime.mjcf.import", "MJCFインポート...", move || {
         let root = mjcf_import_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
@@ -129,7 +129,7 @@ fn main() {
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::mjcf", entry_file = %path.display(), error = %error, "MJCFインポート失敗"),
         }
     }))
-    .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.import"))
+    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.mjcf.import"))
     .command(CommandDefinition::new("runtime.mjcf.reimport", "MJCF再インポート...", move || {
         let root = mjcf_reimport_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
@@ -161,7 +161,7 @@ fn main() {
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::mjcf", entry_file = %path.display(), error = %error, "MJCF再インポート失敗"),
         }
     }))
-    .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.reimport"))
+    .menu_item(MenuItemDefinition::custom("data", "データ (D)", "runtime.mjcf.reimport"))
     .run()
     .expect("failed to start workflow IDE framework");
 }

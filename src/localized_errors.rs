@@ -27,6 +27,9 @@ mod tests {
         for key in [
             "meridian.panel.project", "meridian.panel.logs",
             "meridian.error.occurred", "meridian.error.code", "meridian.error.details",
+            "meridian.menu.data", "meridian.menu.urdf.import",
+            "meridian.menu.urdf.export", "meridian.menu.mjcf.import",
+            "meridian.menu.mjcf.reimport",
         ] {
             assert!(!value(EN, key).is_empty());
             assert!(!value(JA, key).is_empty());

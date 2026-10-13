@@ -1,0 +1,9 @@
+locale = "en-US"
+name = "English"
+
+[strings]
+"meridian.panel.project" = "Project"
+"meridian.panel.logs" = "Logs"
+"meridian.error.occurred" = "An error occurred."
+"meridian.error.code" = "Code"
+"meridian.error.details" = "Details"

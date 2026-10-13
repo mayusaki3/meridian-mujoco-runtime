@@ -12,8 +12,8 @@ pub fn format_error(code: &str, details: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    const EN: &str = include_str!("../resources/locales/en-US.toml");
-    const JA: &str = include_str!("../resources/locales/ja-JP.toml");
+    const EN: &str = include_str!("../resources/meridian-locales/en-US.toml");
+    const JA: &str = include_str!("../resources/meridian-locales/ja-JP.toml");
 
     fn value<'a>(toml: &'a str, key: &str) -> &'a str {
         let prefix = format!("\"{key}\" = \"");

@@ -115,7 +115,7 @@ fn main() {
                 snapshot.bundle.model.joints.len(),
                 snapshot.bundle.model.actuators.len()
             ),
-            Err(error) => eprintln!("MJCFインポート失敗: {error}"),
+            Err(error) => eprintln!("MJCFインポート失敗\nエントリーファイル: {}\nエラー: {error}", path.display()),
         }
     }))
     .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.import"))
@@ -150,7 +150,7 @@ fn main() {
                 "MJCF再インポート完了: {} (UUID継承={}, 新規・未照合={})",
                 path.display(), result.plan.reuse.len(), result.plan.unresolved.len()
             ),
-            Err(error) => eprintln!("MJCF再インポート失敗: {error}"),
+            Err(error) => eprintln!("MJCF再インポート失敗\nエントリーファイル: {}\nエラー: {error}", path.display()),
         }
     }))
     .menu_item(MenuItemDefinition::custom("data", "データ", "runtime.mjcf.reimport"))

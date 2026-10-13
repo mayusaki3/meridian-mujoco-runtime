@@ -36,6 +36,21 @@ mod tests {
     }
 
     #[test]
+    fn japanese_and_english_key_sets_match_exactly() {
+        fn keys(source: &str) -> std::collections::BTreeSet<&str> {
+            source.lines().filter_map(|line| {
+                let (key, _) = line.split_once(" = ")?;
+                if key.starts_with('"') && key.ends_with('"') {
+                    Some(key.trim_matches('"'))
+                } else {
+                    None
+                }
+            }).collect()
+        }
+        assert_eq!(keys(EN), keys(JA), "JP/EN translation keys diverged");
+    }
+
+    #[test]
     fn error_details_remain_identical_across_languages() {
         let details = "The system cannot find the file specified. (os error 2)";
         let code = "MJCF-0003";

@@ -149,3 +149,7 @@ Use files from `tests/fixtures/mjcf-regression/` in the repository checkout:
 7. Close and reopen a successfully imported project; confirm it remains consistent. Unit tests cover JSON reload and UUID preservation, while the GUI currently reports status to stderr rather than a notification panel.
 
 **Multi-file coverage:** existing checked-in `mjcf-regression` fixtures are single-file. Nested `<include>` reimport is covered by temporary-file unit tests; add a committed multi-file GUI fixture before claiming manual include-tree verification. The file picker uses the selected entry file's parent directory as the source root, so included files must be within that directory tree.
+
+### MJCF import error-path reporting (Phase 7 follow-up)
+
+The GUI command now prints the selected entry file path for both import and reimport failures. Verify with `tests/fixtures/mjcf-regression/invalid/03_missing_actuator_target.xml`: the error should include `エントリーファイル:` followed by the selected file and `UnknownActuatorTarget`. This is **entry-file attribution only**; identifying the actual nested `<include>` source and line/column for semantic inspection failures remains an open improvement. The current UI reports via stderr, not an in-app error dialog.

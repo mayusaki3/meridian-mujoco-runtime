@@ -134,3 +134,18 @@ The runtime application stores optional `mjcf-snapshot.json` in its application-
 ### Runtime Data menu MJCF actions (phase 7)
 
 The runtime Data menu now exposes `MJCFインポート...` and `MJCF再インポート...` using native file selection for `.xml` and `.mjcf`. Both actions require an open project. Import refuses to overwrite an existing snapshot, while reimport requires one and calls the phase-6 identity-preserving reimport API. The selected entry file's parent directory is used as the source root; all included files must be within it. Results and errors are currently printed to standard error, not shown as framework notifications. Reimport automatically commits the validated snapshot, including unmatched new UUIDs, without an intermediate user confirmation. There is no persisted external source path or dedicated source-root picker yet. Runtime GUI behavior requires manual validation in addition to the existing unit tests.
+
+
+### Phase 7 manual GUI verification: exact fixture files
+
+Use files from `tests/fixtures/mjcf-regression/` in the repository checkout:
+
+1. Create/open a new runtime project, select Data > MJCFインポート..., and choose `valid/02_hinge_motor.xml`. Expect successful import of bodies `base` and `arm`, joint `shoulder`, and actuator `shoulder_motor`.
+2. Select Data > MJCF再インポート... and choose **the same** `valid/02_hinge_motor.xml`. Expect the previously matched named elements to retain UUIDs, and check the reported reuse/unresolved counts. This file also contains an unnamed `freejoint`; not every imported element is eligible for UUID reuse.
+3. While the first project still has an MJCF snapshot, try Data > MJCFインポート... again. Expect a refusal before the file picker (use Reimport instead).
+4. In a **separate new project**, choose `invalid/01_malformed_xml.xml` for MJCF import. Expect an error and no MJCF snapshot.
+5. In another new project, choose `invalid/03_missing_actuator_target.xml`. Expect a reference-validation error and no MJCF snapshot.
+6. In another new project, import `valid/08_nested_bodies_inertial.xml`. Expect successful import; this is a different model and is not an identity-continuity fixture for the first project.
+7. Close and reopen a successfully imported project; confirm it remains consistent. Unit tests cover JSON reload and UUID preservation, while the GUI currently reports status to stderr rather than a notification panel.
+
+**Multi-file coverage:** existing checked-in `mjcf-regression` fixtures are single-file. Nested `<include>` reimport is covered by temporary-file unit tests; add a committed multi-file GUI fixture before claiming manual include-tree verification. The file picker uses the selected entry file's parent directory as the source root, so included files must be within that directory tree.

@@ -1,6 +1,7 @@
 mod urdf_io;
 mod runtime_project;
 mod mjcf_project;
+mod localized_errors;
 #[cfg(test)]
 mod urdf_fixture_tests;
 
@@ -9,9 +10,18 @@ use workflow_ide_framework::{
     command::{CommandDefinition, MenuItemDefinition},
     project::ProjectContext,
     project_event::ProjectEventKind,
+    project_panel::{ProjectPanelModel, ProjectPanelNode},
+    resource_registry::ResourceRegistry,
+    PanelDefinition, PanelKind, LayoutConfig,
 };
 
 fn main() {
+    let project_tree = ProjectPanelModel {
+        roots: vec![ProjectPanelNode::logical("project", "Meridian")],
+        framework_resources: vec![],
+        application_resources: vec![],
+    };
+    let project_tree = project_tree.tree(&ResourceRegistry::default());
     let current_project = Arc::new(Mutex::new(None::<PathBuf>));
     let import_project = Arc::clone(&current_project);
     let export_project = Arc::clone(&current_project);
@@ -23,7 +33,14 @@ fn main() {
         "meridian-mujoco-runtime",
         "Meridian MuJoCo Runtime",
     )
+    .localization_resources("resources/locales")
     .project_adapter(runtime_project::RuntimeProjectAdapter)
+    .panel(PanelDefinition::new("project", "meridian.panel.project", PanelKind::StandardUi))
+    .panel(PanelDefinition::new("logs", "meridian.panel.logs", PanelKind::StandardUi))
+    .layout(LayoutConfig::new(["project", "logs"]).split_below("project", 0.70, ["logs"]).selected("project"))
+    .tree_viewer_panel("project", project_tree)
+    .log_viewer_panel("logs")
+    .language_settings_panel()
     .on_project_event(move |event| {
         if let Ok(mut active) = event_project.lock() {
             match event.kind {

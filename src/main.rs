@@ -37,7 +37,7 @@ fn main() {
     .project_adapter(runtime_project::RuntimeProjectAdapter)
     .panel(PanelDefinition::new("project", "meridian.panel.project", PanelKind::StandardUi))
     .panel(PanelDefinition::new("logs", "meridian.panel.logs", PanelKind::StandardUi))
-    .layout(LayoutConfig::new(["project", "logs"]).split_below("project", 0.70, ["logs"]).selected("project"))
+    .layout(LayoutConfig::new(["project"]).split_below("project", 0.70, ["logs"]).selected("project"))
     .tree_viewer_panel("project", project_tree)
     .log_viewer_panel("logs")
     .language_settings_panel()

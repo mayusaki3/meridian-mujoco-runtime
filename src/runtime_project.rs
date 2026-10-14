@@ -140,6 +140,42 @@ mod tests {
     }
 
     #[test]
+    fn save_as_copies_mjcf_snapshot_without_changing_source() {
+        let source = temporary_context();
+        let destination = temporary_context();
+        let sources = source.root().join("external-sources");
+        fs::create_dir_all(&sources).unwrap();
+        let entry = sources.join("main.xml");
+        fs::write(&entry, r#"<mujoco><worldbody><body name="base"><joint name="hinge"/></body></worldbody></mujoco>"#).unwrap();
+
+        let original = crate::mjcf_project::import_snapshot(&source, &entry, &sources).unwrap();
+        let mut adapter = RuntimeProjectAdapter;
+        adapter.save_project_data_as(Some(&source), &destination, "save-as").unwrap();
+        let copied = crate::mjcf_project::load_snapshot(&destination).unwrap().unwrap();
+        assert_eq!(copied, original, "Save As must preserve MJCF identities and sources");
+        assert_eq!(crate::mjcf_project::load_snapshot(&source).unwrap().unwrap(), original);
+
+        fs::remove_dir_all(source.root()).unwrap();
+        fs::remove_dir_all(destination.root()).unwrap();
+    }
+
+    #[test]
+    fn corrupt_mjcf_snapshot_is_reported_as_inconsistent() {
+        let context = temporary_context();
+        fs::create_dir_all(context.application_directory()).unwrap();
+        fs::write(context.application_directory().join("mjcf-snapshot.json"), b"{invalid").unwrap();
+        let mut adapter = RuntimeProjectAdapter;
+        match adapter.check_project_consistency(&context).unwrap() {
+            ProjectDataConsistency::Inconsistent { can_open, can_recover, .. } => {
+                assert!(!can_open);
+                assert!(!can_recover);
+            }
+            other => panic!("expected inconsistent project, got {other:?}"),
+        }
+        fs::remove_dir_all(context.root()).unwrap();
+    }
+
+    #[test]
     fn save_as_copies_source() {
         let source = temporary_context();
         let destination = temporary_context();

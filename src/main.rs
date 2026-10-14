@@ -71,7 +71,7 @@ fn main() {
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", file = %path.display(), error = %error, message = %workflow_ide_framework::localization::text("meridian.urdf.import.failed")),
         }
     }).label_key("meridian.menu.urdf.import"))
-    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.import"))
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.import").menu_after("menu.file"))
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
         let root = export_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {

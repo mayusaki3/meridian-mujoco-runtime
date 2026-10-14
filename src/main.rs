@@ -15,6 +15,35 @@ use workflow_ide_framework::{
     PanelDefinition, PanelKind, LayoutConfig,
 };
 
+fn data_menu_import_item() -> MenuItemDefinition {
+    MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.import")
+        .menu_after("menu.file")
+        .access_key('D')
+}
+
+#[cfg(test)]
+mod menu_access_tests {
+    use super::*;
+    use workflow_ide_framework::command::MenuPlacement;
+
+    #[test]
+    fn data_menu_has_d_access_key_and_follows_file() {
+        let item = data_menu_import_item();
+        assert_eq!(item.access_key, Some('D'));
+        assert_eq!(item.top_level_placement, MenuPlacement::After("menu.file".into()));
+    }
+
+    #[test]
+    fn data_menu_translations_do_not_duplicate_access_key() {
+        for (source, expected) in [
+            (include_str!("../resources/meridian-locales/en-US.toml"), "Data"),
+            (include_str!("../resources/meridian-locales/ja-JP.toml"), "データ"),
+        ] {
+            assert!(source.lines().any(|line| line.trim() == format!("\\\"meridian.menu.data\\\" = \\\"{expected}\\\"")));
+        }
+    }
+}
+
 fn main() {
     let project_tree = ProjectPanelModel {
         roots: vec![ProjectPanelNode::logical("project", "Meridian")],
@@ -71,7 +100,7 @@ fn main() {
             Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::urdf", file = %path.display(), error = %error, message = %workflow_ide_framework::localization::text("meridian.urdf.import.failed")),
         }
     }).label_key("meridian.menu.urdf.import"))
-    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.import").menu_after("menu.file"))
+    .menu_item(data_menu_import_item())
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
         let root = export_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {

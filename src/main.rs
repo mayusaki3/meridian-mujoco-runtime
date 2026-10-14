@@ -39,7 +39,7 @@ mod menu_access_tests {
             (include_str!("../resources/meridian-locales/en-US.toml"), "Data"),
             (include_str!("../resources/meridian-locales/ja-JP.toml"), "データ"),
         ] {
-            assert!(source.lines().any(|line| line.trim() == format!("\\\"meridian.menu.data\\\" = \\\"{expected}\\\"")));
+            assert!(source.lines().any(|line| line.trim() == format!("\"meridian.menu.data\" = \"{expected}\"")));
         }
     }
 }

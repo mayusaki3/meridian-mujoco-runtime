@@ -34,6 +34,24 @@ mod menu_access_tests {
     }
 
     #[test]
+    fn data_commands_require_stored_project() {
+        let source = include_str!("main.rs");
+        for key in [
+            "meridian.menu.urdf.import",
+            "meridian.menu.urdf.export",
+            "meridian.menu.mjcf.import",
+            "meridian.menu.mjcf.reimport",
+        ] {
+            assert!(
+                source.contains(&format!(
+                    "}).label_key(\\\"{key}\\\").requires_stored_project())"
+                )),
+                "{key} must require a stored project"
+            );
+        }
+    }
+
+    #[test]
     fn data_menu_translations_do_not_duplicate_access_key() {
         for (source, expected) in [
             (include_str!("../resources/meridian-locales/en-US.toml"), "Data"),

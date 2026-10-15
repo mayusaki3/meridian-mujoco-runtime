@@ -27,7 +27,7 @@ cargo test --all-targets
 4. Attempt to import one malformed URDF via the dialog; verify the error is reported and the previously imported valid source is not replaced.
 5. Cancel the import and export dialogs; verify no file or project data is changed.
 
-Steps 4–5 are pending manual GUI verification as of 2026-10-15. They are not marked PASS by the existing automated tests alone.
+Steps 4–5 were checked manually on 2026-10-15. Step 4 has error-log and SHA-256 evidence; step 5 is recorded as PASS based on user confirmation, without a separate attached log.
 
 PowerShell example (replace the project path):
 
@@ -48,6 +48,17 @@ Get-FileHash -Path $files -Algorithm SHA256 | Format-Table Hash, Path -AutoSize
 | URDF-RT-001–003 | `valid/01_minimal.urdf` / `D:\WORKPLACE\MELTEST01` | PASS | PASS | Source, stored, exported and re-exported hashes matched: `0BC974966BAD9EF7AB08A39B02E3D2BE1672FD3E52F3D88D73A3ABF37E679B21` |
 | URDF-RT-004 | `valid/02_two_link_revolute.urdf` / `D:\WORKPLACE\MELTEST02` | PASS | PASS | Source, stored, exported and re-exported hashes matched: `968F52E3E1149AB529CBE00A6076F63BF61D19DF72FC6773A331D20794993384` |
 | URDF-RT-005 | `valid/03_prismatic_fixed_chain.urdf` / `D:\WORKPLACE\MELTEST03` | PASS | PASS | Source, stored, exported and re-exported hashes matched: `29882D3BF0E86E7844996E98B4E82079FBF8D599519AA806838D65F105DC5929` |
+
+### GUI error and cancellation results
+
+| Case | Check | Result | Evidence |
+|---|---|---|---|
+| URDF-GUI-ERR-001 | Malformed XML rejected through GUI | PASS | `InvalidXml("expected 'link' tag, not 'robot' at 1:40")`, `URDFインポート失敗` logged for `invalid/01_malformed_xml.urdf` |
+| URDF-GUI-ERR-001 | Previously imported URDF retained | PASS | Source and `MELTEST03/application/robot-source.urdf` SHA-256 both `29882D3BF0E86E7844996E98B4E82079FBF8D599519AA806838D65F105DC5929` |
+| URDF-GUI-CANCEL-001 | Import file-dialog cancellation | PASS (user confirmed) | No independent log attached |
+| URDF-GUI-CANCEL-002 | Export file-dialog cancellation | PASS (user confirmed) | No independent log attached |
+
+GUI smoke verification is closed for the current URDF import/export scope. Reopen it if a UI integration regression is observed.
 
 The remaining valid fixtures are **automated-regression-only** by design. Previously proposed per-fixture GUI cases URDF-RT-006 through URDF-RT-010 are withdrawn as redundant manual verification; their source fixtures and automated coverage remain intact. The record above reports user-supplied GUI results, not a newly executed CI run.
 

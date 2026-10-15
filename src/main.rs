@@ -19,6 +19,7 @@ fn data_menu_import_item() -> MenuItemDefinition {
     MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.import")
         .menu_after("menu.file")
         .access_key('D')
+        .requires_stored_project()
 }
 
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod menu_access_tests {
     fn data_menu_has_d_access_key_and_follows_file() {
         let item = data_menu_import_item();
         assert_eq!(item.access_key, Some('D'));
+        assert!(item.requires_stored_project);
         assert_eq!(item.top_level_placement, MenuPlacement::After("menu.file".into()));
     }
 

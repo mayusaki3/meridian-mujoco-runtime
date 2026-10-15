@@ -42,12 +42,8 @@ mod menu_access_tests {
             "meridian.menu.mjcf.import",
             "meridian.menu.mjcf.reimport",
         ] {
-            assert!(
-                source.contains(&format!(
-                    "}).label_key(\\\"{key}\\\").requires_stored_project())"
-                )),
-                "{key} must require a stored project"
-            );
+            let expected = format!("}}).label_key(\\\"{key}\\\").requires_stored_project())");
+            assert!(source.contains(&expected), "{key} must require a stored project");
         }
     }
 

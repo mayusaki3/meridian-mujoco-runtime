@@ -42,19 +42,21 @@ cargo test --manifest-path crates/robot-model-import/Cargo.toml --all-targets
 
 The fixture-backed tests in `crates/robot-model-import/src/mjcf.rs` exercise inspection and original XML retention. The `src/mjcf_project.rs` tests cover snapshot persistence, reimport identity/provenance, and non-overwrite on failure. This is not a claim that every fixture is exercised through the project snapshot pipeline or that full MJCF semantics are validated.
 
-## GUI smoke test plan — pending
+## GUI smoke test results — 2026-10-15 to 2026-10-16
 
 Use a dedicated test project; do not overwrite a project containing valuable MJCF snapshots.
 
 | Case | UI-only verification | Expected outcome |
 |---|---|---|
-| MJCF-GUI-001 | Import a representative valid MJCF through Data > MJCF Import | Success notification and project snapshot created |
-| MJCF-GUI-002 | Save/close/reopen project, then use MJCF Reimport with a valid source | Reimport success notification; snapshot remains loadable |
-| MJCF-GUI-003 | Attempt malformed MJCF import/reimport as applicable | Error notification; previous snapshot unchanged |
-| MJCF-GUI-004 | Cancel import/reimport file dialog | No change and no error |
-| MJCF-GUI-005 | Invoke import when a snapshot already exists | Existing-source protection or warning according to current command behavior |
+| MJCF-GUI-001 | Import representative valid MJCF through Data > MJCF Import | PASS: `MELTEST-MJCF01/application/mjcf-snapshot.json` created; success log not independently supplied |
+| MJCF-GUI-002 | Reimport valid/01, save/close/reopen | PASS: reimport success log, snapshot present (1140 bytes), no reported error |
+| MJCF-GUI-003 | Reimport invalid/01_malformed_xml.xml | PASS: error log, previous snapshot SHA256 unchanged |
+| MJCF-GUI-004 | Cancel import on project without MJCF and reimport on project with MJCF | PASS by user report: no error; absent snapshot remains absent; existing snapshot hash unchanged |
+| MJCF-GUI-005 | Invoke import when a snapshot already exists | PASS: warning before file dialog, existing snapshot hash unchanged |
 
-Record actual logs and snapshot hashes when executing; none of these GUI cases is marked PASS by the automated tests alone.
+Verified snapshot SHA256 before/after invalid reimport and cancel: `D6412DDD26BAE28D271D3786A4D4F5032F969E01475598B45097C8053DAFF1AB`.
+
+Current GUI reports warnings/errors to the log, not a UI message dialog. FW-side scoped warning/error collection and end-of-operation notification is planned separately; do not interpret the existing log as a dialog notification.
 
 ## Limitations
 

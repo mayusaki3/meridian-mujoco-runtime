@@ -1,63 +1,15 @@
 //! Project-local logical Robot catalog. No FW UI or Registry ownership here.
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::{collections::HashSet, io};
 
 const SCHEMA_VERSION: u32 = 1;
-static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
 
-// Use OS randomness for independent IDs without adding a runtime dependency.
 fn new_robot_id() -> io::Result<String> {
-    use std::io::Read;
-    let mut bytes = [0u8; 16];
-    let mut file = std::fs::File::open(if cfg!(windows) {
-        r"\\.\CNG"
-    } else {
-        "/dev/urandom"
-    });
-    if let Ok(ref mut file) = file {
-        if file.read_exact(&mut bytes).is_ok() {
-            bytes[6] = (bytes[6] & 0x0f) | 0x40;
-            bytes[8] = (bytes[8] & 0x3f) | 0x80;
-            return Ok(format_uuid(bytes));
-        }
-    }
-    // Fallback uses process/time/counter, still checked for project-local uniqueness.
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|e| invalid(e.to_string()))?
-        .as_nanos();
-    let n = SEQUENCE.fetch_add(1, Ordering::Relaxed) as u128;
-    let mut v = (now ^ ((std::process::id() as u128) << 64) ^ n).to_be_bytes();
-    v[6] = (v[6] & 0x0f) | 0x40;
-    v[8] = (v[8] & 0x3f) | 0x80;
-    Ok(format_uuid(v))
-}
-
-fn format_uuid(b: [u8; 16]) -> String {
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        b[0],
-        b[1],
-        b[2],
-        b[3],
-        b[4],
-        b[5],
-        b[6],
-        b[7],
-        b[8],
-        b[9],
-        b[10],
-        b[11],
-        b[12],
-        b[13],
-        b[14],
-        b[15]
-    )
+    Ok(uuid::Uuid::new_v4().to_string())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

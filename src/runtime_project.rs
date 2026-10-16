@@ -7,8 +7,8 @@ use workflow_ide_framework::{
     project_save::ApplicationSaveResult,
 };
 
-use crate::urdf_io::ImportedUrdf;
 use crate::robot_catalog::RobotCatalog;
+use crate::urdf_io::ImportedUrdf;
 
 const DATA_VERSION: &str = "urdf-source-v1";
 const SOURCE_FILE: &str = "robot-source.urdf";
@@ -115,7 +115,9 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
         Self::load_source(context)?;
         crate::mjcf_project::load_snapshot(context)?;
         Self::load_catalog(context)?;
-        Ok(ApplicationSaveResult { data_version: Some(DATA_VERSION.into()) })
+        Ok(ApplicationSaveResult {
+            data_version: Some(DATA_VERSION.into()),
+        })
     }
 
     fn save_project_data_as(
@@ -148,8 +150,14 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temporary_context() -> ProjectContext {
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        ProjectContext::new(std::env::temp_dir().join(format!("meridian-project-test-{}-{unique}", std::process::id())))
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        ProjectContext::new(std::env::temp_dir().join(format!(
+            "meridian-project-test-{}-{unique}",
+            std::process::id()
+        )))
     }
 
     #[test]
@@ -159,7 +167,13 @@ mod tests {
         RuntimeProjectAdapter::import_source(&context, xml).unwrap();
         let mut adapter = RuntimeProjectAdapter;
         adapter.save_project_data(&context, "test").unwrap();
-        assert_eq!(RuntimeProjectAdapter::load_source(&context).unwrap().unwrap().unchanged_xml(), xml);
+        assert_eq!(
+            RuntimeProjectAdapter::load_source(&context)
+                .unwrap()
+                .unwrap()
+                .unchanged_xml(),
+            xml
+        );
         fs::remove_dir_all(context.root()).unwrap();
     }
 
@@ -169,7 +183,13 @@ mod tests {
         let xml = "<robot name=\"r\"><link name=\"base\"/></robot>";
         RuntimeProjectAdapter::import_source(&context, xml).unwrap();
         assert!(RuntimeProjectAdapter::import_source(&context, "<robot>").is_err());
-        assert_eq!(RuntimeProjectAdapter::load_source(&context).unwrap().unwrap().unchanged_xml(), xml);
+        assert_eq!(
+            RuntimeProjectAdapter::load_source(&context)
+                .unwrap()
+                .unwrap()
+                .unchanged_xml(),
+            xml
+        );
         fs::remove_dir_all(context.root()).unwrap();
     }
 
@@ -184,10 +204,22 @@ mod tests {
 
         let original = crate::mjcf_project::import_snapshot(&source, &entry, &sources).unwrap();
         let mut adapter = RuntimeProjectAdapter;
-        adapter.save_project_data_as(Some(&source), &destination, "save-as").unwrap();
-        let copied = crate::mjcf_project::load_snapshot(&destination).unwrap().unwrap();
-        assert_eq!(copied, original, "Save As must preserve MJCF identities and sources");
-        assert_eq!(crate::mjcf_project::load_snapshot(&source).unwrap().unwrap(), original);
+        adapter
+            .save_project_data_as(Some(&source), &destination, "save-as")
+            .unwrap();
+        let copied = crate::mjcf_project::load_snapshot(&destination)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            copied, original,
+            "Save As must preserve MJCF identities and sources"
+        );
+        assert_eq!(
+            crate::mjcf_project::load_snapshot(&source)
+                .unwrap()
+                .unwrap(),
+            original
+        );
 
         fs::remove_dir_all(source.root()).unwrap();
         fs::remove_dir_all(destination.root()).unwrap();
@@ -197,10 +229,18 @@ mod tests {
     fn corrupt_mjcf_snapshot_is_reported_as_inconsistent() {
         let context = temporary_context();
         fs::create_dir_all(context.application_directory()).unwrap();
-        fs::write(context.application_directory().join("mjcf-snapshot.json"), b"{invalid").unwrap();
+        fs::write(
+            context.application_directory().join("mjcf-snapshot.json"),
+            b"{invalid",
+        )
+        .unwrap();
         let mut adapter = RuntimeProjectAdapter;
         match adapter.check_project_consistency(&context).unwrap() {
-            ProjectDataConsistency::Inconsistent { can_open, can_recover, .. } => {
+            ProjectDataConsistency::Inconsistent {
+                can_open,
+                can_recover,
+                ..
+            } => {
                 assert!(!can_open);
                 assert!(!can_recover);
             }
@@ -216,8 +256,16 @@ mod tests {
         let xml = "<robot name=\"r\"><link name=\"base\"/></robot>";
         RuntimeProjectAdapter::import_source(&source, xml).unwrap();
         let mut adapter = RuntimeProjectAdapter;
-        adapter.save_project_data_as(Some(&source), &destination, "test").unwrap();
-        assert_eq!(RuntimeProjectAdapter::load_source(&destination).unwrap().unwrap().unchanged_xml(), xml);
+        adapter
+            .save_project_data_as(Some(&source), &destination, "test")
+            .unwrap();
+        assert_eq!(
+            RuntimeProjectAdapter::load_source(&destination)
+                .unwrap()
+                .unwrap()
+                .unchanged_xml(),
+            xml
+        );
         fs::remove_dir_all(source.root()).unwrap();
         fs::remove_dir_all(destination.root()).unwrap();
     }

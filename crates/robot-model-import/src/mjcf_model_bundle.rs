@@ -1,11 +1,14 @@
 //! ROBOT-Model projection of a resolved MJCF source bundle.
 use crate::{
-    integrity::{validate_model, IntegrityError},
-    mjcf_include::{inspect_mjcf_file, ResolveError},
-    model::{from_mjcf, ModelImportError, RobotModel},
+    integrity::{IntegrityError, validate_model},
+    mjcf_include::{ResolveError, inspect_mjcf_file},
+    model::{ModelImportError, RobotModel, from_mjcf},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::{Path, PathBuf}};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 /// Keep original files separate from the generated source-neutral model.
 /// The model's original_xml is the expanded snapshot, not the entry source.
@@ -27,10 +30,17 @@ pub fn from_mjcf_file(path: &Path) -> Result<MjcfModelBundle, BundleError> {
     let resolved = inspect_mjcf_file(path).map_err(BundleError::Resolve)?;
     let model = from_mjcf(&resolved.expanded_xml).map_err(BundleError::Projection)?;
     validate_model(&model).map_err(BundleError::Integrity)?;
-    let entry_path = std::fs::canonicalize(path).map_err(|e| BundleError::Resolve(
-        ResolveError::Io { path: path.to_owned(), message: e.to_string() }
-    ))?;
-    Ok(MjcfModelBundle { model, entry_path, sources: resolved.sources })
+    let entry_path = std::fs::canonicalize(path).map_err(|e| {
+        BundleError::Resolve(ResolveError::Io {
+            path: path.to_owned(),
+            message: e.to_string(),
+        })
+    })?;
+    Ok(MjcfModelBundle {
+        model,
+        entry_path,
+        sources: resolved.sources,
+    })
 }
 
 impl MjcfModelBundle {
@@ -58,12 +68,16 @@ mod tests {
         }
         fn put(&self, name: &str, xml: &str) {
             let path = self.0.join(name);
-            if let Some(parent) = path.parent() { std::fs::create_dir_all(parent).unwrap(); }
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
             std::fs::write(path, xml).unwrap();
         }
     }
     impl Drop for Fixture {
-        fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
     }
 
     #[test]
@@ -82,7 +96,9 @@ mod tests {
         assert_eq!(bundle.sources.len(), 2);
         assert_eq!(bundle.entry_xml(), Some(main));
         assert!(bundle.sources.values().any(|v| v == part));
-        assert!(matches!(&bundle.model.actuators[0].target, TransmissionTarget::Joint(id) if id == &bundle.model.joints[0].id));
+        assert!(
+            matches!(&bundle.model.actuators[0].target, TransmissionTarget::Joint(id) if id == &bundle.model.joints[0].id)
+        );
         bundle.validate().unwrap();
     }
 
@@ -96,7 +112,13 @@ mod tests {
         let decoded: MjcfModelBundle = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, original);
         decoded.validate().unwrap();
-        assert_ne!(from_mjcf_file(&f.0.join("main.xml")).unwrap().model.model_id, original.model.model_id);
+        assert_ne!(
+            from_mjcf_file(&f.0.join("main.xml"))
+                .unwrap()
+                .model
+                .model_id,
+            original.model.model_id
+        );
     }
 
     #[test]
@@ -104,6 +126,9 @@ mod tests {
         let f = Fixture::new();
         f.put("main.xml", r#"<mujoco><include file="part.xml"/><actuator><motor joint="missing"/></actuator></mujoco>"#);
         f.put("part.xml", r#"<mujocoinclude><worldbody><body name="b"><joint name="j"/></body></worldbody></mujocoinclude>"#);
-        assert!(matches!(from_mjcf_file(&f.0.join("main.xml")), Err(BundleError::Resolve(_))));
+        assert!(matches!(
+            from_mjcf_file(&f.0.join("main.xml")),
+            Err(BundleError::Resolve(_))
+        ));
     }
 }

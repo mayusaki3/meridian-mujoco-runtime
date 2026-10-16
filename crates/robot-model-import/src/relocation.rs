@@ -21,53 +21,74 @@ pub fn plan_relocation(
     original.validate().map_err(PlacementError::InvalidSource)?;
     edited.validate().map_err(PlacementError::InvalidSource)?;
     if snapshot.schema_version != 1 {
-        return Err(PlacementError::Conflict("unsupported placement schema".into()));
+        return Err(PlacementError::Conflict(
+            "unsupported placement schema".into(),
+        ));
     }
     let old: HashMap<_, _> = original.elements.iter().map(|e| (e.key, e)).collect();
     let new: HashMap<_, _> = edited.elements.iter().map(|e| (e.key, e)).collect();
     let mut seen = HashSet::new();
-    let preserved: HashSet<_> = snapshot.items.iter()
+    let preserved: HashSet<_> = snapshot
+        .items
+        .iter()
         .filter(|item| matches!(item.payload, PreservedPayload::Element { .. }))
-        .map(|item| item.source_key).collect();
+        .map(|item| item.source_key)
+        .collect();
     let mut plan = Vec::new();
     for item in &snapshot.items {
         if !seen.insert(item.source_key) {
             return Err(PlacementError::Conflict("duplicate preserved key".into()));
         }
         let p = &item.placement;
-        let parent_key = p.parent_key.ok_or_else(||
-            PlacementError::Conflict("unkeyed parent".into()))?;
-        let original_parent = old.get(&parent_key).ok_or_else(||
-            PlacementError::Conflict("original parent missing".into()))?;
-        let new_parent = new.get(&parent_key).ok_or_else(||
-            PlacementError::Conflict("edited parent deleted".into()))?;
+        let parent_key = p
+            .parent_key
+            .ok_or_else(|| PlacementError::Conflict("unkeyed parent".into()))?;
+        let original_parent = old
+            .get(&parent_key)
+            .ok_or_else(|| PlacementError::Conflict("original parent missing".into()))?;
+        let new_parent = new
+            .get(&parent_key)
+            .ok_or_else(|| PlacementError::Conflict("edited parent deleted".into()))?;
         if original_parent.owner != new_parent.owner
             || original_parent.local_name != new_parent.local_name
-            || original_parent.namespace_uri != new_parent.namespace_uri {
+            || original_parent.namespace_uri != new_parent.namespace_uri
+        {
             return Err(PlacementError::Conflict("parent identity changed".into()));
         }
         match &item.payload {
             PreservedPayload::Attribute { .. } => {
-                if p.sibling_index.is_some() || p.previous_sibling_key.is_some()
-                    || p.next_sibling_key.is_some() {
-                    return Err(PlacementError::Conflict("attribute has sibling anchors".into()));
+                if p.sibling_index.is_some()
+                    || p.previous_sibling_key.is_some()
+                    || p.next_sibling_key.is_some()
+                {
+                    return Err(PlacementError::Conflict(
+                        "attribute has sibling anchors".into(),
+                    ));
                 }
             }
             PreservedPayload::Element { .. } => {
-                let element = old.get(&item.source_key).ok_or_else(||
-                    PlacementError::Conflict("original preserved element missing".into()))?;
+                let element = old.get(&item.source_key).ok_or_else(|| {
+                    PlacementError::Conflict("original preserved element missing".into())
+                })?;
                 if element.parent_key != Some(parent_key)
                     || element.previous_sibling_key != p.previous_sibling_key
-                    || element.next_sibling_key != p.next_sibling_key {
+                    || element.next_sibling_key != p.next_sibling_key
+                {
                     return Err(PlacementError::Conflict("original anchors mismatch".into()));
                 }
                 if new.contains_key(&item.source_key) {
-                    return Err(PlacementError::Conflict("preserved element already present in edited graph".into()));
+                    return Err(PlacementError::Conflict(
+                        "preserved element already present in edited graph".into(),
+                    ));
                 }
                 // Walk through adjacent preserved siblings until a surviving
                 // anchor is found. Cycles and missing preserved entries fail.
                 let resolve = |forward: bool| -> Result<Option<Uuid>, PlacementError> {
-                    let mut cursor = if forward { p.next_sibling_key } else { p.previous_sibling_key };
+                    let mut cursor = if forward {
+                        p.next_sibling_key
+                    } else {
+                        p.previous_sibling_key
+                    };
                     let mut visited = HashSet::new();
                     while let Some(key) = cursor {
                         if !visited.insert(key) {
@@ -75,19 +96,28 @@ pub fn plan_relocation(
                         }
                         if let Some(neighbor) = new.get(&key) {
                             if neighbor.parent_key != Some(parent_key) {
-                                return Err(PlacementError::Conflict("anchor moved to another parent".into()));
+                                return Err(PlacementError::Conflict(
+                                    "anchor moved to another parent".into(),
+                                ));
                             }
                             return Ok(Some(key));
                         }
                         if !preserved.contains(&key) {
                             return Err(PlacementError::Conflict("sibling anchor deleted".into()));
                         }
-                        let neighbor = old.get(&key).ok_or_else(||
-                            PlacementError::Conflict("preserved anchor missing in original".into()))?;
+                        let neighbor = old.get(&key).ok_or_else(|| {
+                            PlacementError::Conflict("preserved anchor missing in original".into())
+                        })?;
                         if neighbor.parent_key != Some(parent_key) {
-                            return Err(PlacementError::Conflict("preserved sibling parent changed".into()));
+                            return Err(PlacementError::Conflict(
+                                "preserved sibling parent changed".into(),
+                            ));
                         }
-                        cursor = if forward { neighbor.next_sibling_key } else { neighbor.previous_sibling_key };
+                        cursor = if forward {
+                            neighbor.next_sibling_key
+                        } else {
+                            neighbor.previous_sibling_key
+                        };
                     }
                     Ok(None)
                 };
@@ -96,22 +126,35 @@ pub fn plan_relocation(
                 match (before, after) {
                     (Some(left), Some(right)) => {
                         if new[&left].next_sibling_key != Some(right)
-                            || new[&right].previous_sibling_key != Some(left) {
-                            return Err(PlacementError::Conflict("surviving anchors no longer adjacent".into()));
+                            || new[&right].previous_sibling_key != Some(left)
+                        {
+                            return Err(PlacementError::Conflict(
+                                "surviving anchors no longer adjacent".into(),
+                            ));
                         }
                     }
-                    (Some(left), None) if new[&left].next_sibling_key.is_some() =>
-                        return Err(PlacementError::Conflict("trailing anchor no longer last".into())),
-                    (None, Some(right)) if new[&right].previous_sibling_key.is_some() =>
-                        return Err(PlacementError::Conflict("leading anchor no longer first".into())),
-                    (None, None) if new.values().any(|e| e.parent_key == Some(parent_key)) =>
-                        return Err(PlacementError::Conflict("unanchored insertion ambiguous".into())),
+                    (Some(left), None) if new[&left].next_sibling_key.is_some() => {
+                        return Err(PlacementError::Conflict(
+                            "trailing anchor no longer last".into(),
+                        ));
+                    }
+                    (None, Some(right)) if new[&right].previous_sibling_key.is_some() => {
+                        return Err(PlacementError::Conflict(
+                            "leading anchor no longer first".into(),
+                        ));
+                    }
+                    (None, None) if new.values().any(|e| e.parent_key == Some(parent_key)) => {
+                        return Err(PlacementError::Conflict(
+                            "unanchored insertion ambiguous".into(),
+                        ));
+                    }
                     _ => {}
                 }
             }
         }
         plan.push(Relocation {
-            source_key: item.source_key, parent_key,
+            source_key: item.source_key,
+            parent_key,
             // Immediate anchors may themselves be preserved and therefore
             // restored by another entry in the same plan.
             insert_before: p.next_sibling_key,
@@ -120,7 +163,6 @@ pub fn plan_relocation(
     }
     Ok(plan)
 }
-
 
 /** Validate a relocation plan before any XML mutation. Every preserved
  * element must appear exactly once, and every dependency must be acyclic.
@@ -135,35 +177,52 @@ pub fn validate_relocation_plan(
     let mut planned = HashMap::new();
     for entry in plan {
         if planned.insert(entry.source_key, entry).is_some() {
-            return Err(PlacementError::Conflict("duplicate relocation entry".into()));
+            return Err(PlacementError::Conflict(
+                "duplicate relocation entry".into(),
+            ));
         }
     }
     if planned.len() != snapshot.items.len() {
         return Err(PlacementError::Conflict("relocation count mismatch".into()));
     }
-    let saved: HashMap<_, _> = snapshot.items.iter().map(|item| (item.source_key, item)).collect();
+    let saved: HashMap<_, _> = snapshot
+        .items
+        .iter()
+        .map(|item| (item.source_key, item))
+        .collect();
     if saved.len() != snapshot.items.len() {
-        return Err(PlacementError::Conflict("duplicate snapshot source key".into()));
+        return Err(PlacementError::Conflict(
+            "duplicate snapshot source key".into(),
+        ));
     }
     let existing: HashMap<_, _> = edited.elements.iter().map(|e| (e.key, e)).collect();
     for entry in plan {
-        let item = saved.get(&entry.source_key).ok_or_else(||
-            PlacementError::Conflict("unrecognized relocation key".into()))?;
+        let item = saved
+            .get(&entry.source_key)
+            .ok_or_else(|| PlacementError::Conflict("unrecognized relocation key".into()))?;
         if item.placement.parent_key != Some(entry.parent_key)
             || item.placement.previous_sibling_key != entry.insert_after
-            || item.placement.next_sibling_key != entry.insert_before {
-            return Err(PlacementError::Conflict("relocation differs from saved anchors".into()));
+            || item.placement.next_sibling_key != entry.insert_before
+        {
+            return Err(PlacementError::Conflict(
+                "relocation differs from saved anchors".into(),
+            ));
         }
         if !existing.contains_key(&entry.parent_key) {
             return Err(PlacementError::Conflict("relocation parent absent".into()));
         }
         if matches!(item.payload, PreservedPayload::Attribute { .. }) {
             if entry.insert_before.is_some() || entry.insert_after.is_some() {
-                return Err(PlacementError::Conflict("attribute has ordering dependency".into()));
+                return Err(PlacementError::Conflict(
+                    "attribute has ordering dependency".into(),
+                ));
             }
             continue;
         }
-        for anchor in [entry.insert_before, entry.insert_after].into_iter().flatten() {
+        for anchor in [entry.insert_before, entry.insert_after]
+            .into_iter()
+            .flatten()
+        {
             if anchor == entry.source_key {
                 return Err(PlacementError::Conflict("self-referential anchor".into()));
             }
@@ -172,12 +231,18 @@ pub fn validate_relocation_plan(
                     return Err(PlacementError::Conflict("anchor parent mismatch".into()));
                 }
             } else {
-                let dependency = planned.get(&anchor).ok_or_else(||
-                    PlacementError::Conflict("unresolved relocation dependency".into()))?;
+                let dependency = planned.get(&anchor).ok_or_else(|| {
+                    PlacementError::Conflict("unresolved relocation dependency".into())
+                })?;
                 if dependency.parent_key != entry.parent_key {
-                    return Err(PlacementError::Conflict("dependency parent mismatch".into()));
+                    return Err(PlacementError::Conflict(
+                        "dependency parent mismatch".into(),
+                    ));
                 }
-                if !matches!(saved.get(&anchor).map(|i| &i.payload), Some(PreservedPayload::Element { .. })) {
+                if !matches!(
+                    saved.get(&anchor).map(|i| &i.payload),
+                    Some(PreservedPayload::Element { .. })
+                ) {
                     return Err(PlacementError::Conflict("anchor is not an element".into()));
                 }
             }
@@ -185,7 +250,10 @@ pub fn validate_relocation_plan(
     }
     // Every after/before relation must be reciprocal for planned neighbors.
     for entry in plan {
-        if !matches!(saved[&entry.source_key].payload, PreservedPayload::Element { .. }) {
+        if !matches!(
+            saved[&entry.source_key].payload,
+            PreservedPayload::Element { .. }
+        ) {
             continue;
         }
         if let Some(key) = entry.insert_before {
@@ -198,7 +266,9 @@ pub fn validate_relocation_plan(
         if let Some(key) = entry.insert_after {
             if let Some(neighbor) = planned.get(&key) {
                 if neighbor.insert_before != Some(entry.source_key) {
-                    return Err(PlacementError::Conflict("nonreciprocal previous anchor".into()));
+                    return Err(PlacementError::Conflict(
+                        "nonreciprocal previous anchor".into(),
+                    ));
                 }
             }
         }
@@ -207,9 +277,13 @@ pub fn validate_relocation_plan(
         let mut cursor = Some(entry.source_key);
         while let Some(key) = cursor {
             if !visited.insert(key) {
-                return Err(PlacementError::Conflict("relocation dependency cycle".into()));
+                return Err(PlacementError::Conflict(
+                    "relocation dependency cycle".into(),
+                ));
             }
-            cursor = planned.get(&key).and_then(|p| p.insert_before)
+            cursor = planned
+                .get(&key)
+                .and_then(|p| p.insert_before)
                 .filter(|next| planned.contains_key(next));
         }
     }
@@ -219,7 +293,9 @@ pub fn validate_relocation_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{inspect_urdf, placement::PlacementSnapshot, source_mapping::SourceMappingDocument};
+    use crate::{
+        inspect_urdf, placement::PlacementSnapshot, source_mapping::SourceMappingDocument,
+    };
 
     fn setup() -> (PlacementSnapshot, SourceElementGraph) {
         let xml = r#"<robot name="r"><link name="a"><visual/><vendor/><collision/></link></robot>"#;
@@ -231,12 +307,23 @@ mod tests {
 
     fn without_preserved(graph: &SourceElementGraph, key: Uuid) -> SourceElementGraph {
         let mut edited = graph.clone();
-        let item = edited.elements.iter().find(|e| e.key == key).unwrap().clone();
+        let item = edited
+            .elements
+            .iter()
+            .find(|e| e.key == key)
+            .unwrap()
+            .clone();
         for element in &mut edited.elements {
-            if element.next_sibling_key == Some(key) { element.next_sibling_key = item.next_sibling_key; }
-            if element.previous_sibling_key == Some(key) { element.previous_sibling_key = item.previous_sibling_key; }
-            if element.parent_key == item.parent_key && element.path.last().copied().unwrap_or(0) >
-                item.path.last().copied().unwrap_or(0) {
+            if element.next_sibling_key == Some(key) {
+                element.next_sibling_key = item.next_sibling_key;
+            }
+            if element.previous_sibling_key == Some(key) {
+                element.previous_sibling_key = item.previous_sibling_key;
+            }
+            if element.parent_key == item.parent_key
+                && element.path.last().copied().unwrap_or(0)
+                    > item.path.last().copied().unwrap_or(0)
+            {
                 *element.path.last_mut().unwrap() -= 1;
             }
         }
@@ -283,7 +370,11 @@ mod tests {
         let mut edited = without_preserved(&original, key);
         let previous = snapshot.items[0].placement.previous_sibling_key.unwrap();
         let next = snapshot.items[0].placement.next_sibling_key.unwrap();
-        let p = edited.elements.iter().position(|e| e.key == previous).unwrap();
+        let p = edited
+            .elements
+            .iter()
+            .position(|e| e.key == previous)
+            .unwrap();
         let n = edited.elements.iter().position(|e| e.key == next).unwrap();
         edited.elements[p].next_sibling_key = None;
         edited.elements[n].previous_sibling_key = None;
@@ -311,12 +402,16 @@ mod tests {
         let xml = r#"<robot name="r"><link name="a"><visual/><vendor_a/><vendor_b/><collision/></link></robot>"#;
         let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(xml, &mapping).unwrap();
-        let mut snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &original).unwrap();
+        let mut snapshot =
+            PlacementSnapshot::from_source_with_graph(xml, &mapping, &original).unwrap();
         let first = snapshot.items[0].source_key;
         let second = snapshot.items[1].source_key;
         let edited = without_preserved(&without_preserved(&original, first), second);
         snapshot.items.remove(1);
-        assert!(matches!(plan_relocation(&snapshot, &original, &edited), Err(PlacementError::Conflict(_))));
+        assert!(matches!(
+            plan_relocation(&snapshot, &original, &edited),
+            Err(PlacementError::Conflict(_))
+        ));
     }
 
     #[test]
@@ -333,7 +428,10 @@ mod tests {
         let edited = without_preserved(&original, snapshot.items[0].source_key);
         let plan = plan_relocation(&snapshot, &original, &edited).unwrap();
         assert!(validate_relocation_plan(&snapshot, &edited, &[]).is_err());
-        assert!(validate_relocation_plan(&snapshot, &edited, &[plan[0].clone(), plan[0].clone()]).is_err());
+        assert!(
+            validate_relocation_plan(&snapshot, &edited, &[plan[0].clone(), plan[0].clone()])
+                .is_err()
+        );
     }
 
     #[test]
@@ -351,9 +449,11 @@ mod tests {
         let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(xml).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(xml, &mapping).unwrap();
         let snapshot = PlacementSnapshot::from_source_with_graph(xml, &mapping, &original).unwrap();
-        let edited = without_preserved(&without_preserved(&original, snapshot.items[0].source_key), snapshot.items[1].source_key);
+        let edited = without_preserved(
+            &without_preserved(&original, snapshot.items[0].source_key),
+            snapshot.items[1].source_key,
+        );
         let plan = plan_relocation(&snapshot, &original, &edited).unwrap();
         assert_eq!(validate_relocation_plan(&snapshot, &edited, &plan), Ok(()));
     }
-
 }

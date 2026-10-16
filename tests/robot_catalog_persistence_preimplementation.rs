@@ -1,20 +1,19 @@
 //! MER-RESOURCE-001 persistence contract tests.
 //! The adapter methods are intentionally introduced after these tests.
-#[path = "../src/robot_catalog.rs"]
-mod robot_catalog;
-#[path = "../src/urdf_io.rs"]
-mod urdf_io;
 #[path = "../src/mjcf_project.rs"]
 mod mjcf_project;
+#[path = "../src/robot_catalog.rs"]
+mod robot_catalog;
 #[path = "../src/runtime_project.rs"]
 mod runtime_project;
+#[path = "../src/urdf_io.rs"]
+mod urdf_io;
 
 use robot_catalog::RobotCatalog;
 use runtime_project::RuntimeProjectAdapter;
 use std::fs;
 use workflow_ide_framework::{
-    project::ProjectContext,
-    project_adapter::ApplicationProjectAdapter,
+    project::ProjectContext, project_adapter::ApplicationProjectAdapter,
     project_resource::ProjectDataConsistency,
 };
 
@@ -45,8 +44,18 @@ fn mer_res_tc_010_legacy_project_without_catalog_stays_compatible() {
     let project = context();
     let mut adapter = RuntimeProjectAdapter;
     adapter.save_project_data(&project, "legacy").unwrap();
-    assert!(RuntimeProjectAdapter::load_catalog(&project).unwrap().robots().is_empty());
-    assert!(!project.application_directory().join("robot-catalog.json").exists());
+    assert!(
+        RuntimeProjectAdapter::load_catalog(&project)
+            .unwrap()
+            .robots()
+            .is_empty()
+    );
+    assert!(
+        !project
+            .application_directory()
+            .join("robot-catalog.json")
+            .exists()
+    );
     fs::remove_dir_all(project.root()).unwrap();
 }
 
@@ -56,8 +65,14 @@ fn mer_res_tc_011_legacy_urdf_does_not_infer_robot_identity() {
     RuntimeProjectAdapter::import_source(
         &project,
         r#"<robot name="legacy"><link name="base"/></robot>"#,
-    ).unwrap();
-    assert!(RuntimeProjectAdapter::load_catalog(&project).unwrap().robots().is_empty());
+    )
+    .unwrap();
+    assert!(
+        RuntimeProjectAdapter::load_catalog(&project)
+            .unwrap()
+            .robots()
+            .is_empty()
+    );
     fs::remove_dir_all(project.root()).unwrap();
 }
 
@@ -86,9 +101,20 @@ fn mer_res_tc_014_save_as_copies_catalog_without_changing_ids() {
     let id = catalog.create("Original").unwrap();
     RuntimeProjectAdapter::save_catalog(&source, &catalog).unwrap();
     let mut adapter = RuntimeProjectAdapter;
-    adapter.save_project_data_as(Some(&source), &destination, "save-as").unwrap();
-    assert_eq!(RuntimeProjectAdapter::load_catalog(&destination).unwrap().robots()[0].robot_id, id);
-    assert_eq!(RuntimeProjectAdapter::load_catalog(&source).unwrap(), catalog);
+    adapter
+        .save_project_data_as(Some(&source), &destination, "save-as")
+        .unwrap();
+    assert_eq!(
+        RuntimeProjectAdapter::load_catalog(&destination)
+            .unwrap()
+            .robots()[0]
+            .robot_id,
+        id
+    );
+    assert_eq!(
+        RuntimeProjectAdapter::load_catalog(&source).unwrap(),
+        catalog
+    );
     fs::remove_dir_all(source.root()).unwrap();
     fs::remove_dir_all(destination.root()).unwrap();
 }
@@ -97,11 +123,18 @@ fn mer_res_tc_014_save_as_copies_catalog_without_changing_ids() {
 fn mer_res_tc_015_corrupt_catalog_is_reported_as_inconsistent() {
     let project = context();
     fs::create_dir_all(project.application_directory()).unwrap();
-    fs::write(project.application_directory().join("robot-catalog.json"), "{invalid").unwrap();
+    fs::write(
+        project.application_directory().join("robot-catalog.json"),
+        "{invalid",
+    )
+    .unwrap();
     let mut adapter = RuntimeProjectAdapter;
     assert!(matches!(
         adapter.check_project_consistency(&project).unwrap(),
-        ProjectDataConsistency::Inconsistent { can_open: false, .. }
+        ProjectDataConsistency::Inconsistent {
+            can_open: false,
+            ..
+        }
     ));
     fs::remove_dir_all(project.root()).unwrap();
 }

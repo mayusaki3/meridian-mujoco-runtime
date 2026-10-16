@@ -11,11 +11,17 @@ fn conflict(message: &str) -> PlacementError {
 }
 
 fn shifted_start(original: usize, patches: &[(usize, usize)]) -> usize {
-    original + patches.iter().filter(|(at, _)| *at <= original).map(|(_, len)| len).sum::<usize>()
+    original
+        + patches
+            .iter()
+            .filter(|(at, _)| *at <= original)
+            .map(|(_, len)| len)
+            .sum::<usize>()
 }
 
 fn node_at_start<'a, 'input>(root: Node<'a, 'input>, start: usize) -> Option<Node<'a, 'input>> {
-    root.descendants().find(|n| n.is_element() && n.range().start == start)
+    root.descendants()
+        .find(|n| n.is_element() && n.range().start == start)
 }
 
 fn node_at<'a, 'input>(root: Node<'a, 'input>, path: &[usize]) -> Option<Node<'a, 'input>> {
@@ -42,15 +48,21 @@ pub fn restore_elements(
     if root.tag_name().name() != "robot" || root.tag_name().namespace().is_some() {
         return Err(conflict("edited XML root is not robot"));
     }
-    let nodes: HashMap<Uuid, Node<'_, '_>> = edited.elements.iter().map(|element| {
-        let node = node_at(root, &element.path).ok_or_else(|| conflict("edited graph path missing"))?;
-        if node.tag_name().name() != element.local_name
-            || node.tag_name().namespace() != element.namespace_uri.as_deref()
-            || node.attribute("name") != element.name_attribute.as_deref() {
-            return Err(conflict("edited graph does not match XML"));
-        }
-        Ok((element.key, node))
-    }).collect::<Result<_, PlacementError>>()?;
+    let nodes: HashMap<Uuid, Node<'_, '_>> = edited
+        .elements
+        .iter()
+        .map(|element| {
+            let node = node_at(root, &element.path)
+                .ok_or_else(|| conflict("edited graph path missing"))?;
+            if node.tag_name().name() != element.local_name
+                || node.tag_name().namespace() != element.namespace_uri.as_deref()
+                || node.attribute("name") != element.name_attribute.as_deref()
+            {
+                return Err(conflict("edited graph does not match XML"));
+            }
+            Ok((element.key, node))
+        })
+        .collect::<Result<_, PlacementError>>()?;
     if nodes.len() != doc.descendants().filter(|n| n.is_element()).count() {
         return Err(conflict("edited graph element count mismatch"));
     }
@@ -60,12 +72,15 @@ pub fn restore_elements(
     for element in &edited.elements {
         let node = nodes[&element.key];
         if let Some(parent_key) = element.parent_key {
-            let parent = nodes.get(&parent_key).ok_or_else(|| conflict("edited parent missing"))?;
+            let parent = nodes
+                .get(&parent_key)
+                .ok_or_else(|| conflict("edited parent missing"))?;
             if node.parent().filter(|n| n.is_element()) != Some(*parent) {
                 return Err(conflict("edited parent relationship mismatch"));
             }
             let parent_element = by_key[&parent_key];
-            let expected_owner = if element.namespace_uri.is_none() && element.local_name == "link" {
+            let expected_owner = if element.namespace_uri.is_none() && element.local_name == "link"
+            {
                 element.owner.clone()
             } else if element.namespace_uri.is_none() && element.local_name == "joint" {
                 element.owner.clone()
@@ -78,10 +93,15 @@ pub fn restore_elements(
         }
         let actual_previous = node.prev_siblings().filter(|n| n.is_element()).nth(1);
         let actual_next = node.next_siblings().filter(|n| n.is_element()).nth(1);
-        if actual_previous.map(|n| n.range().start) != element.previous_sibling_key
-            .and_then(|k| nodes.get(&k).map(|n| n.range().start))
-            || actual_next.map(|n| n.range().start) != element.next_sibling_key
-                .and_then(|k| nodes.get(&k).map(|n| n.range().start)) {
+        if actual_previous.map(|n| n.range().start)
+            != element
+                .previous_sibling_key
+                .and_then(|k| nodes.get(&k).map(|n| n.range().start))
+            || actual_next.map(|n| n.range().start)
+                != element
+                    .next_sibling_key
+                    .and_then(|k| nodes.get(&k).map(|n| n.range().start))
+        {
             return Err(conflict("edited sibling anchors mismatch"));
         }
     }
@@ -90,50 +110,80 @@ pub fn restore_elements(
     let mut insertions: HashMap<usize, Vec<(Vec<usize>, &str)>> = HashMap::new();
     let mut self_closing: HashMap<usize, String> = HashMap::new();
     for entry in &plan {
-        let item = snapshot.items.iter().find(|i| i.source_key == entry.source_key)
+        let item = snapshot
+            .items
+            .iter()
+            .find(|i| i.source_key == entry.source_key)
             .ok_or_else(|| conflict("preserved item missing"))?;
         let PreservedPayload::Element { xml } = &item.payload else {
             continue;
         };
-        let source = old.get(&entry.source_key).ok_or_else(|| conflict("source element missing"))?;
+        let source = old
+            .get(&entry.source_key)
+            .ok_or_else(|| conflict("source element missing"))?;
         // Walk right through a consecutive preserved run. The insertion point
         // is the first surviving sibling, or the parent's closing tag.
         let mut next = source.next_sibling_key;
         let mut visited = HashSet::new();
         while let Some(key) = next {
-            if !visited.insert(key) { return Err(conflict("sibling cycle")); }
-            if !preserved.contains(&key) { break; }
-            next = old.get(&key).ok_or_else(|| conflict("source sibling missing"))?.next_sibling_key;
+            if !visited.insert(key) {
+                return Err(conflict("sibling cycle"));
+            }
+            if !preserved.contains(&key) {
+                break;
+            }
+            next = old
+                .get(&key)
+                .ok_or_else(|| conflict("source sibling missing"))?
+                .next_sibling_key;
         }
-        let parent = nodes.get(&entry.parent_key).ok_or_else(|| conflict("parent missing"))?;
+        let parent = nodes
+            .get(&entry.parent_key)
+            .ok_or_else(|| conflict("parent missing"))?;
         let position = if let Some(key) = next {
-            let neighbor = nodes.get(&key).ok_or_else(|| conflict("surviving sibling missing"))?;
+            let neighbor = nodes
+                .get(&key)
+                .ok_or_else(|| conflict("surviving sibling missing"))?;
             if neighbor.parent().filter(|n| n.is_element()) != Some(*parent) {
                 return Err(conflict("sibling parent mismatch"));
             }
             neighbor.range().start
         } else {
             let raw = &edited_xml[parent.range()];
-            let opening_end = opening_tag_end(raw).ok_or_else(|| conflict("invalid parent start tag"))?;
+            let opening_end =
+                opening_tag_end(raw).ok_or_else(|| conflict("invalid parent start tag"))?;
             if raw[opening_end..].starts_with("/>") {
-                let qualified_name = raw.strip_prefix('<')
-                    .and_then(|head| head.split(|c: char| c.is_whitespace() || c == '/' || c == '>').next())
+                let qualified_name = raw
+                    .strip_prefix('<')
+                    .and_then(|head| {
+                        head.split(|c: char| c.is_whitespace() || c == '/' || c == '>')
+                            .next()
+                    })
                     .filter(|name| !name.is_empty())
                     .ok_or_else(|| conflict("invalid parent qualified name"))?;
                 let position = parent.range().start + opening_end;
                 self_closing.insert(position, qualified_name.to_owned());
                 position
             } else {
-                let qualified_name = raw.strip_prefix('<')
-                    .and_then(|head| head.split(|c: char| c.is_whitespace() || c == '/' || c == '>').next())
+                let qualified_name = raw
+                    .strip_prefix('<')
+                    .and_then(|head| {
+                        head.split(|c: char| c.is_whitespace() || c == '/' || c == '>')
+                            .next()
+                    })
                     .filter(|name| !name.is_empty())
                     .ok_or_else(|| conflict("invalid parent qualified name"))?;
                 let closing = format!("</{qualified_name}>");
-                let relative = raw.rfind(&closing).ok_or_else(|| conflict("parent closing tag missing"))?;
+                let relative = raw
+                    .rfind(&closing)
+                    .ok_or_else(|| conflict("parent closing tag missing"))?;
                 parent.range().start + relative
             }
         };
-        insertions.entry(position).or_default().push((source.path.clone(), xml));
+        insertions
+            .entry(position)
+            .or_default()
+            .push((source.path.clone(), xml));
     }
     let mut positions: Vec<_> = insertions.into_iter().collect();
     positions.sort_by_key(|(position, _)| *position);
@@ -158,33 +208,63 @@ pub fn restore_elements(
     // XML escaping is explicit and no existing attribute may be overwritten.
     let mut attr_patches: Vec<(usize, String)> = Vec::new();
     {
-        let intermediate = Document::parse(&output).map_err(|_| conflict("restored XML invalid"))?;
+        let intermediate =
+            Document::parse(&output).map_err(|_| conflict("restored XML invalid"))?;
         let mut used = HashSet::new();
         for item in &snapshot.items {
-            let PreservedPayload::Attribute { local_name, namespace_uri, value } = &item.payload else { continue };
-            if !used.insert((item.placement.parent_key, namespace_uri.as_deref(), local_name.as_str())) {
+            let PreservedPayload::Attribute {
+                local_name,
+                namespace_uri,
+                value,
+            } = &item.payload
+            else {
+                continue;
+            };
+            if !used.insert((
+                item.placement.parent_key,
+                namespace_uri.as_deref(),
+                local_name.as_str(),
+            )) {
                 return Err(conflict("duplicate preserved attribute"));
             }
-            let parent_key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent key absent"))?;
-            let parent_graph = edited.elements.iter().find(|e| e.key == parent_key)
+            let parent_key = item
+                .placement
+                .parent_key
+                .ok_or_else(|| conflict("attribute parent key absent"))?;
+            let parent_graph = edited
+                .elements
+                .iter()
+                .find(|e| e.key == parent_key)
                 .ok_or_else(|| conflict("attribute parent missing"))?;
-            let original_start = nodes.get(&parent_key)
-                .ok_or_else(|| conflict("attribute parent key missing"))?.range().start;
-            let node = node_at_start(intermediate.root_element(),
-                shifted_start(original_start, &element_shifts))
-                .ok_or_else(|| conflict("attribute parent identity missing"))?;
+            let original_start = nodes
+                .get(&parent_key)
+                .ok_or_else(|| conflict("attribute parent key missing"))?
+                .range()
+                .start;
+            let node = node_at_start(
+                intermediate.root_element(),
+                shifted_start(original_start, &element_shifts),
+            )
+            .ok_or_else(|| conflict("attribute parent identity missing"))?;
             if node.tag_name().name() != parent_graph.local_name
                 || node.tag_name().namespace() != parent_graph.namespace_uri.as_deref()
-                || node.attribute("name") != parent_graph.name_attribute.as_deref() {
+                || node.attribute("name") != parent_graph.name_attribute.as_deref()
+            {
                 return Err(conflict("attribute parent identity changed"));
             }
-            if !valid_xml_name(local_name) { return Err(conflict("invalid attribute name")); }
+            if !valid_xml_name(local_name) {
+                return Err(conflict("invalid attribute name"));
+            }
             let qualified = if let Some(uri) = namespace_uri {
-                if node.attribute((uri.as_str(), local_name.as_str())).is_some() {
+                if node
+                    .attribute((uri.as_str(), local_name.as_str()))
+                    .is_some()
+                {
                     return Err(conflict("namespaced attribute already exists"));
                 }
-                let prefix = node.namespaces().find(|ns| ns.uri() == uri && ns.name()
-                    .is_some_and(|p| valid_xml_name(p)))
+                let prefix = node
+                    .namespaces()
+                    .find(|ns| ns.uri() == uri && ns.name().is_some_and(|p| valid_xml_name(p)))
                     .and_then(|ns| ns.name())
                     .ok_or_else(|| conflict("namespace prefix unavailable"))?;
                 format!("{prefix}:{local_name}")
@@ -201,8 +281,10 @@ pub fn restore_elements(
             attr_patches.push((insertion, format!(" {qualified}=\"{escaped}\"")));
         }
     }
-    let attribute_shifts: Vec<(usize, usize)> = attr_patches.iter()
-        .map(|(position, fragment)| (*position, fragment.len())).collect();
+    let attribute_shifts: Vec<(usize, usize)> = attr_patches
+        .iter()
+        .map(|(position, fragment)| (*position, fragment.len()))
+        .collect();
     attr_patches.sort_by_key(|(position, _)| *position);
     for (position, fragment) in attr_patches.into_iter().rev() {
         output.insert_str(position, &fragment);
@@ -218,8 +300,11 @@ pub fn restore_elements(
         }
     }
     for (xml, expected_count) in expected_fragments {
-        let actual_count = result.descendants().filter(|n| n.is_element())
-            .filter(|n| &output[n.range()] == xml).count();
+        let actual_count = result
+            .descendants()
+            .filter(|n| n.is_element())
+            .filter(|n| &output[n.range()] == xml)
+            .count();
         if actual_count != expected_count {
             return Err(conflict("restored fragment missing or duplicated"));
         }
@@ -230,64 +315,118 @@ pub fn restore_elements(
     let result_root = result.root_element();
     let mut expected: HashMap<Uuid, Vec<(usize, Uuid)>> = HashMap::new();
     for item in &snapshot.items {
-        if !matches!(item.payload, PreservedPayload::Element { .. }) { continue; }
-        let element = old.get(&item.source_key).ok_or_else(|| conflict("source key absent"))?;
-        let parent_key = element.parent_key.ok_or_else(|| conflict("source parent absent"))?;
-        let sibling_index = element.path.last().copied().ok_or_else(|| conflict("source index absent"))?;
-        expected.entry(parent_key).or_default().push((sibling_index, item.source_key));
+        if !matches!(item.payload, PreservedPayload::Element { .. }) {
+            continue;
+        }
+        let element = old
+            .get(&item.source_key)
+            .ok_or_else(|| conflict("source key absent"))?;
+        let parent_key = element
+            .parent_key
+            .ok_or_else(|| conflict("source parent absent"))?;
+        let sibling_index = element
+            .path
+            .last()
+            .copied()
+            .ok_or_else(|| conflict("source index absent"))?;
+        expected
+            .entry(parent_key)
+            .or_default()
+            .push((sibling_index, item.source_key));
     }
     for (parent_key, mut entries) in expected {
         entries.sort_by_key(|(index, _)| *index);
-        let parent = nodes.get(&parent_key).ok_or_else(|| conflict("edited parent absent"))?;
-        let parent_start = nodes.get(&parent_key)
-            .ok_or_else(|| conflict("parent graph key absent"))?.range().start;
-        let output_parent = node_at_start(result_root,
-            shifted_start(shifted_start(parent_start, &element_shifts), &attribute_shifts))
-            .ok_or_else(|| conflict("output parent absent"))?;
+        let parent = nodes
+            .get(&parent_key)
+            .ok_or_else(|| conflict("edited parent absent"))?;
+        let parent_start = nodes
+            .get(&parent_key)
+            .ok_or_else(|| conflict("parent graph key absent"))?
+            .range()
+            .start;
+        let output_parent = node_at_start(
+            result_root,
+            shifted_start(
+                shifted_start(parent_start, &element_shifts),
+                &attribute_shifts,
+            ),
+        )
+        .ok_or_else(|| conflict("output parent absent"))?;
         if output_parent.tag_name() != parent.tag_name() {
             return Err(conflict("output parent changed"));
         }
-        let saved_children: HashMap<_, _> = entries.iter().map(|(_, key)| {
-            let item = snapshot.items.iter().find(|i| i.source_key == *key).unwrap();
-            (*key, item)
-        }).collect();
-        let original_order: Vec<_> = original.elements.iter()
+        let saved_children: HashMap<_, _> = entries
+            .iter()
+            .map(|(_, key)| {
+                let item = snapshot
+                    .items
+                    .iter()
+                    .find(|i| i.source_key == *key)
+                    .unwrap();
+                (*key, item)
+            })
+            .collect();
+        let original_order: Vec<_> = original
+            .elements
+            .iter()
             .filter(|e| e.parent_key == Some(parent_key))
             .collect();
         let mut original_order = original_order;
         original_order.sort_by_key(|e| e.path.last().copied().unwrap_or(0));
-        let mut expected_keys: Vec<_> = original_order.iter()
+        let mut expected_keys: Vec<_> = original_order
+            .iter()
             .filter(|e| saved_children.contains_key(&e.key) || nodes.contains_key(&e.key))
-            .map(|e| e.key).collect();
+            .map(|e| e.key)
+            .collect();
         // Newly added edited siblings are not represented in the original
         // graph. Current planner only permits insertion between adjacent
         // surviving anchors; reject rather than guessing their placement.
-        let edited_children: HashSet<_> = edited.elements.iter()
+        let edited_children: HashSet<_> = edited
+            .elements
+            .iter()
             .filter(|e| e.parent_key == Some(parent_key))
-            .map(|e| e.key).collect();
-        if edited_children.iter().any(|key| !original_order.iter().any(|e| e.key == *key)) {
+            .map(|e| e.key)
+            .collect();
+        if edited_children
+            .iter()
+            .any(|key| !original_order.iter().any(|e| e.key == *key))
+        {
             return Err(conflict("new siblings require explicit reconciliation"));
         }
-        let actual_children: Vec<_> = output_parent.children().filter(|n| n.is_element()).collect();
+        let actual_children: Vec<_> = output_parent
+            .children()
+            .filter(|n| n.is_element())
+            .collect();
         if actual_children.len() != expected_keys.len() {
             return Err(conflict("restored sibling count mismatch"));
         }
         for (index, key) in expected_keys.drain(..).enumerate() {
             let child = actual_children[index];
             if let Some(item) = saved_children.get(&key) {
-                let PreservedPayload::Element { xml } = &item.payload else { unreachable!() };
+                let PreservedPayload::Element { xml } = &item.payload else {
+                    unreachable!()
+                };
                 if &output[child.range()] != xml {
                     return Err(conflict("restored sibling content or order mismatch"));
                 }
-                if item.owner != old[&key].owner || item.owner != edited.elements.iter()
-                    .find(|e| e.key == parent_key)
-                    .ok_or_else(|| conflict("edited owner absent"))?.owner {
+                if item.owner != old[&key].owner
+                    || item.owner
+                        != edited
+                            .elements
+                            .iter()
+                            .find(|e| e.key == parent_key)
+                            .ok_or_else(|| conflict("edited owner absent"))?
+                            .owner
+                {
                     return Err(conflict("restored owner mismatch"));
                 }
             } else {
-                let survivor = nodes.get(&key).ok_or_else(|| conflict("surviving sibling missing"))?;
+                let survivor = nodes
+                    .get(&key)
+                    .ok_or_else(|| conflict("surviving sibling missing"))?;
                 if child.tag_name() != survivor.tag_name()
-                    || child.attribute("name") != survivor.attribute("name") {
+                    || child.attribute("name") != survivor.attribute("name")
+                {
                     return Err(conflict("surviving sibling order mismatch"));
                 }
             }
@@ -295,18 +434,40 @@ pub fn restore_elements(
     }
     // Attribute value and owner verification after reparsing.
     for item in &snapshot.items {
-        let PreservedPayload::Attribute { local_name, namespace_uri, value } = &item.payload else { continue };
-        let key = item.placement.parent_key.ok_or_else(|| conflict("attribute parent absent"))?;
-        let parent = edited.elements.iter().find(|e| e.key == key)
+        let PreservedPayload::Attribute {
+            local_name,
+            namespace_uri,
+            value,
+        } = &item.payload
+        else {
+            continue;
+        };
+        let key = item
+            .placement
+            .parent_key
+            .ok_or_else(|| conflict("attribute parent absent"))?;
+        let parent = edited
+            .elements
+            .iter()
+            .find(|e| e.key == key)
             .ok_or_else(|| conflict("attribute parent graph absent"))?;
-        let original_start = nodes.get(&key)
-            .ok_or_else(|| conflict("attribute output parent key absent"))?.range().start;
-        let node = node_at_start(result_root,
-            shifted_start(shifted_start(original_start, &element_shifts), &attribute_shifts))
-            .ok_or_else(|| conflict("attribute output parent absent"))?;
+        let original_start = nodes
+            .get(&key)
+            .ok_or_else(|| conflict("attribute output parent key absent"))?
+            .range()
+            .start;
+        let node = node_at_start(
+            result_root,
+            shifted_start(
+                shifted_start(original_start, &element_shifts),
+                &attribute_shifts,
+            ),
+        )
+        .ok_or_else(|| conflict("attribute output parent absent"))?;
         if node.tag_name().name() != parent.local_name
             || node.tag_name().namespace() != parent.namespace_uri.as_deref()
-            || node.attribute("name") != parent.name_attribute.as_deref() {
+            || node.attribute("name") != parent.name_attribute.as_deref()
+        {
             return Err(conflict("attribute output parent identity changed"));
         }
         let observed = match namespace_uri {
@@ -327,20 +488,31 @@ fn valid_xml_name(name: &str) -> bool {
         && !name.to_ascii_lowercase().starts_with("xml")
 }
 fn escape_attribute(value: &str) -> String {
-    value.replace('&', "&amp;").replace('<', "&lt;")
-        .replace('"', "&quot;").replace('\r', "&#13;")
-        .replace('\n', "&#10;").replace('\t', "&#9;")
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('"', "&quot;")
+        .replace('\r', "&#13;")
+        .replace('\n', "&#10;")
+        .replace('\t', "&#9;")
 }
 fn opening_tag_end(raw: &str) -> Option<usize> {
     let mut quote = None;
     for (index, c) in raw.char_indices() {
         if let Some(q) = quote {
-            if c == q { quote = None; }
-        } else if c == '\'' || c == '"' { quote = Some(c); }
-        else if c == '>' {
+            if c == q {
+                quote = None;
+            }
+        } else if c == '\'' || c == '"' {
+            quote = Some(c);
+        } else if c == '>' {
             let mut pos = index;
-            while pos > 0 && raw.as_bytes()[pos - 1].is_ascii_whitespace() { pos -= 1; }
-            if pos > 0 && raw.as_bytes()[pos - 1] == b'/' { pos -= 1; }
+            while pos > 0 && raw.as_bytes()[pos - 1].is_ascii_whitespace() {
+                pos -= 1;
+            }
+            if pos > 0 && raw.as_bytes()[pos - 1] == b'/' {
+                pos -= 1;
+            }
             return Some(pos);
         }
     }
@@ -352,17 +524,33 @@ mod tests {
     use super::*;
     use crate::{inspect_urdf, source_mapping::SourceMappingDocument};
 
-    fn fixture() -> (PlacementSnapshot, SourceElementGraph, SourceElementGraph, String) {
+    fn fixture() -> (
+        PlacementSnapshot,
+        SourceElementGraph,
+        SourceElementGraph,
+        String,
+    ) {
         let source = r#"<robot name="r"><link name="a"><visual/><vendor_a/><vendor_b/><collision/></link></robot>"#;
-        let edited_xml = r#"<robot name="r"><link name="a"><visual/><collision/></link></robot>"#.to_owned();
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let edited_xml =
+            r#"<robot name="r"><link name="a"><visual/><collision/></link></robot>"#.to_owned();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         let preserved: HashSet<_> = snapshot.items.iter().map(|i| i.source_key).collect();
         edited.elements.retain(|e| !preserved.contains(&e.key));
-        let visual = edited.elements.iter().position(|e| e.local_name == "visual").unwrap();
-        let collision = edited.elements.iter().position(|e| e.local_name == "collision").unwrap();
+        let visual = edited
+            .elements
+            .iter()
+            .position(|e| e.local_name == "visual")
+            .unwrap();
+        let collision = edited
+            .elements
+            .iter()
+            .position(|e| e.local_name == "collision")
+            .unwrap();
         let left = edited.elements[visual].key;
         let right = edited.elements[collision].key;
         edited.elements[visual].next_sibling_key = Some(right);
@@ -396,10 +584,21 @@ mod tests {
     #[test]
     fn rejects_changed_owner_identity() {
         let (snapshot, original, mut edited, xml) = fixture();
-        let link = edited.elements.iter().find(|e| e.local_name == "link").unwrap().owner.clone();
-        let collision = edited.elements.iter_mut().find(|e| e.local_name == "collision").unwrap();
+        let link = edited
+            .elements
+            .iter()
+            .find(|e| e.local_name == "link")
+            .unwrap()
+            .owner
+            .clone();
+        let collision = edited
+            .elements
+            .iter_mut()
+            .find(|e| e.local_name == "collision")
+            .unwrap();
         assert!(matches!(link, crate::source_mapping::SourceOwner::Link(_)));
-        collision.owner = crate::source_mapping::SourceOwner::Robot(edited_dummy_robot_id(&original));
+        collision.owner =
+            crate::source_mapping::SourceOwner::Robot(edited_dummy_robot_id(&original));
         assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
     }
 
@@ -414,15 +613,28 @@ mod tests {
     fn rejects_changed_parent_key() {
         let (snapshot, original, mut edited, xml) = fixture();
         let root_key = edited.elements[0].key;
-        edited.elements.iter_mut().find(|e| e.local_name == "collision").unwrap().parent_key = Some(root_key);
+        edited
+            .elements
+            .iter_mut()
+            .find(|e| e.local_name == "collision")
+            .unwrap()
+            .parent_key = Some(root_key);
         assert!(restore_elements(&xml, &snapshot, &original, &edited).is_err());
     }
 
     #[test]
     fn rejects_reordered_surviving_siblings() {
         let (snapshot, original, mut edited, xml) = fixture();
-        let visual = edited.elements.iter().position(|e| e.local_name == "visual").unwrap();
-        let collision = edited.elements.iter().position(|e| e.local_name == "collision").unwrap();
+        let visual = edited
+            .elements
+            .iter()
+            .position(|e| e.local_name == "visual")
+            .unwrap();
+        let collision = edited
+            .elements
+            .iter()
+            .position(|e| e.local_name == "collision")
+            .unwrap();
         *edited.elements[visual].path.last_mut().unwrap() = 1;
         *edited.elements[collision].path.last_mut().unwrap() = 0;
         let visual_key = edited.elements[visual].key;
@@ -459,17 +671,21 @@ mod tests {
     fn restores_unqualified_attribute_with_xml_escaping() {
         let source = r#"<robot name="r"><link name="a" vendor="a&amp;b&quot;c"/></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let edited = original.clone();
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
         assert!(output.contains(r#"vendor="a&amp;b&quot;c""#));
     }
 
     fn namespace_fixture() -> (PlacementSnapshot, SourceElementGraph, SourceMappingDocument) {
-        let source = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" v:flag="yes"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let source =
+            r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" v:flag="yes"/></robot>"#;
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
         let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
         (snapshot, graph, mapping)
@@ -503,7 +719,8 @@ mod tests {
     #[test]
     fn rejects_namespaced_attribute_collision() {
         let (snapshot, graph, _) = namespace_fixture();
-        let edited_xml = r#"<robot name="r" xmlns:ext="urn:vendor"><link name="a" ext:flag="other"/></robot>"#;
+        let edited_xml =
+            r#"<robot name="r" xmlns:ext="urn:vendor"><link name="a" ext:flag="other"/></robot>"#;
         assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
     }
 
@@ -511,7 +728,8 @@ mod tests {
     fn restores_multiple_attributes_on_one_self_closing_element() {
         let source = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" first="one" second="two" v:flag="yes"/></robot>"#;
         let edited_xml = r#"<robot name="r" xmlns:ext="urn:vendor"><link name="a"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
         let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
         let output = restore_elements(edited_xml, &snapshot, &graph, &graph).unwrap();
@@ -525,8 +743,10 @@ mod tests {
     #[test]
     fn resolves_shadowed_prefix_at_target_element() {
         let source = r#"<robot name="r" xmlns:v="urn:outer"><link name="a" xmlns:v="urn:inner" v:flag="yes"/></robot>"#;
-        let edited_xml = r#"<robot name="r" xmlns:v="urn:outer"><link name="a" xmlns:v="urn:inner"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let edited_xml =
+            r#"<robot name="r" xmlns:v="urn:outer"><link name="a" xmlns:v="urn:inner"/></robot>"#;
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
         let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
         let output = restore_elements(edited_xml, &snapshot, &graph, &graph).unwrap();
@@ -539,8 +759,10 @@ mod tests {
     #[test]
     fn rejects_shadowed_prefix_with_no_in_scope_uri_binding() {
         let source = r#"<robot name="r" xmlns:v="urn:outer"><link name="a" xmlns:v="urn:inner" v:flag="yes"/></robot>"#;
-        let edited_xml = r#"<robot name="r" xmlns:v="urn:inner"><link name="a" xmlns:v="urn:other"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let edited_xml =
+            r#"<robot name="r" xmlns:v="urn:inner"><link name="a" xmlns:v="urn:other"/></robot>"#;
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let graph = SourceElementGraph::from_source(source, &mapping).unwrap();
         let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &graph).unwrap();
         assert!(restore_elements(edited_xml, &snapshot, &graph, &graph).is_err());
@@ -550,17 +772,27 @@ mod tests {
     fn restores_attribute_to_keyed_survivor_after_preceding_element_insertion() {
         let source = r#"<robot name="r"><vendor/><link name="a" custom="correct"/></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "vendor");
-        let link = edited.elements.iter_mut().find(|e| e.local_name == "link").unwrap();
+        let link = edited
+            .elements
+            .iter_mut()
+            .find(|e| e.local_name == "link")
+            .unwrap();
         link.path = vec![0];
         link.previous_sibling_key = None;
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
         let doc = Document::parse(&output).unwrap();
-        let children: Vec<_> = doc.root_element().children().filter(|n| n.is_element()).collect();
+        let children: Vec<_> = doc
+            .root_element()
+            .children()
+            .filter(|n| n.is_element())
+            .collect();
         assert_eq!(children.len(), 2);
         assert_eq!(children[0].tag_name().name(), "vendor");
         assert_eq!(children[0].attribute("custom"), None);
@@ -572,12 +804,20 @@ mod tests {
     fn restores_nested_attributes_after_multiple_ancestor_insertions() {
         let source = r#"<robot name="r"><extension/><link name="a"><vendor/><visual custom="visual"/><collision custom="collision"/></link></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"><visual/><collision/></link></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
-        edited.elements.retain(|e| e.local_name != "extension" && e.local_name != "vendor");
-        let link = edited.elements.iter_mut().find(|e| e.local_name == "link").unwrap();
+        edited
+            .elements
+            .retain(|e| e.local_name != "extension" && e.local_name != "vendor");
+        let link = edited
+            .elements
+            .iter_mut()
+            .find(|e| e.local_name == "link")
+            .unwrap();
         link.path = vec![0];
         link.previous_sibling_key = None;
         for element in &mut edited.elements {
@@ -590,9 +830,16 @@ mod tests {
         }
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
         let doc = Document::parse(&output).unwrap();
-        let root_children: Vec<_> = doc.root_element().children().filter(|n| n.is_element()).collect();
+        let root_children: Vec<_> = doc
+            .root_element()
+            .children()
+            .filter(|n| n.is_element())
+            .collect();
         assert_eq!(root_children[0].tag_name().name(), "extension");
-        let link_children: Vec<_> = root_children[1].children().filter(|n| n.is_element()).collect();
+        let link_children: Vec<_> = root_children[1]
+            .children()
+            .filter(|n| n.is_element())
+            .collect();
         assert_eq!(link_children[0].tag_name().name(), "vendor");
         assert_eq!(link_children[1].attribute("custom"), Some("visual"));
         assert_eq!(link_children[2].attribute("custom"), Some("collision"));
@@ -602,15 +849,25 @@ mod tests {
     fn rejects_attribute_owner_mismatch_after_element_reinsertion() {
         let source = r#"<robot name="r"><extension/><link name="a" custom="value"/></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let mut snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let mut snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "extension");
-        let link = edited.elements.iter_mut().find(|e| e.local_name == "link").unwrap();
+        let link = edited
+            .elements
+            .iter_mut()
+            .find(|e| e.local_name == "link")
+            .unwrap();
         link.path = vec![0];
         link.previous_sibling_key = None;
-        let attr = snapshot.items.iter_mut().find(|i| matches!(i.payload, PreservedPayload::Attribute { .. })).unwrap();
+        let attr = snapshot
+            .items
+            .iter_mut()
+            .find(|i| matches!(i.payload, PreservedPayload::Attribute { .. }))
+            .unwrap();
         attr.owner = edited.elements[0].owner.clone();
         assert!(restore_elements(edited_xml, &snapshot, &original, &edited).is_err());
     }
@@ -619,9 +876,11 @@ mod tests {
     fn restores_child_into_self_closing_parent_with_attributes() {
         let source = r#"<robot name="r"><link name="a" note="keep"><vendor/></link></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "vendor");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
@@ -636,9 +895,11 @@ mod tests {
     fn restores_child_and_attribute_into_self_closing_parent() {
         let source = r#"<robot name="r"><link name="a" custom="value"><vendor/></link></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "vendor");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
@@ -650,54 +911,80 @@ mod tests {
 
     #[test]
     fn restores_namespaced_child_into_self_closing_parent_preserving_prefix() {
-        let source = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a"><v:extension/></link></robot>"#;
+        let source =
+            r#"<robot name="r" xmlns:v="urn:vendor"><link name="a"><v:extension/></link></robot>"#;
         let edited_xml = r#"<robot name="r" xmlns:v="urn:vendor"><link name="a" /></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "extension");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
         assert!(output.contains("<link name=\"a\" ><v:extension/></link>"));
         let doc = Document::parse(&output).unwrap();
-        assert_eq!(doc.descendants().filter(|n| n.tag_name().namespace() == Some("urn:vendor")).count(), 1);
+        assert_eq!(
+            doc.descendants()
+                .filter(|n| n.tag_name().namespace() == Some("urn:vendor"))
+                .count(),
+            1
+        );
     }
 
     #[test]
     fn restores_children_into_two_self_closing_parents() {
         let source = r#"<robot name="r"><link name="a"><vendor_a/></link><link name="b"><vendor_b/></link></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"/><link name="b"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
-        edited.elements.retain(|e| e.local_name != "vendor_a" && e.local_name != "vendor_b");
+        edited
+            .elements
+            .retain(|e| e.local_name != "vendor_a" && e.local_name != "vendor_b");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
         assert!(output.contains("<link name=\"a\"><vendor_a/></link>"));
         assert!(output.contains("<link name=\"b\"><vendor_b/></link>"));
-        assert_eq!(Document::parse(&output).unwrap().descendants().filter(|n| n.is_element()).count(), 5);
+        assert_eq!(
+            Document::parse(&output)
+                .unwrap()
+                .descendants()
+                .filter(|n| n.is_element())
+                .count(),
+            5
+        );
     }
 
     #[test]
     fn preserves_comments_and_whitespace_around_self_closing_expansion() {
         let source = "<robot name=\"r\">\n  <!-- before -->\n  <link name='a'><vendor/></link>\n  <!-- after -->\n</robot>";
         let edited_xml = "<robot name=\"r\">\n  <!-- before -->\n  <link name='a' />\n  <!-- after -->\n</robot>";
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "vendor");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
-        assert_eq!(output, "<robot name=\"r\">\n  <!-- before -->\n  <link name='a' ><vendor/></link>\n  <!-- after -->\n</robot>");
+        assert_eq!(
+            output,
+            "<robot name=\"r\">\n  <!-- before -->\n  <link name='a' ><vendor/></link>\n  <!-- after -->\n</robot>"
+        );
     }
 
     #[test]
     fn restores_unknown_child_before_existing_parent_closing_tag() {
         let source = r#"<robot name="r"><link name="a"><vendor/></link></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"></link></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "vendor");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
@@ -707,10 +994,13 @@ mod tests {
     #[test]
     fn rejects_partial_edit_inside_preserved_namespaced_parent() {
         let source = r#"<robot name="r" xmlns:v="urn:vendor"><v:container><v:extension/></v:container></robot>"#;
-        let edited_xml = r#"<robot name="r" xmlns:v="urn:vendor"><v:container></v:container></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let edited_xml =
+            r#"<robot name="r" xmlns:v="urn:vendor"><v:container></v:container></robot>"#;
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "extension");
         assert!(matches!(
@@ -723,14 +1013,14 @@ mod tests {
     fn restores_identical_unknown_siblings_without_false_duplicate_conflict() {
         let source = r#"<robot name="r"><link name="a"><vendor/><vendor/></link></robot>"#;
         let edited_xml = r#"<robot name="r"><link name="a"/></robot>"#;
-        let mapping = SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
+        let mapping =
+            SourceMappingDocument::from_inspection(&inspect_urdf(source).unwrap()).unwrap();
         let original = SourceElementGraph::from_source(source, &mapping).unwrap();
-        let snapshot = PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
+        let snapshot =
+            PlacementSnapshot::from_source_with_graph(source, &mapping, &original).unwrap();
         let mut edited = original.clone();
         edited.elements.retain(|e| e.local_name != "vendor");
         let output = restore_elements(edited_xml, &snapshot, &original, &edited).unwrap();
         assert_eq!(output, source);
     }
-
-
 }

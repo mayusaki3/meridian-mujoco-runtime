@@ -72,32 +72,53 @@ impl SourceMappingDocument {
             }
         }
         let robot_id = RobotId(Uuid::new_v4());
-        let links: Vec<_> = input.links.iter().map(|name| NamedLink {
-            id: LinkId(Uuid::new_v4()), name: name.clone(),
-        }).collect();
-        let joints: Vec<_> = input.joints.iter().map(|name| NamedJoint {
-            id: JointId(Uuid::new_v4()), name: name.clone(),
-        }).collect();
+        let links: Vec<_> = input
+            .links
+            .iter()
+            .map(|name| NamedLink {
+                id: LinkId(Uuid::new_v4()),
+                name: name.clone(),
+            })
+            .collect();
+        let joints: Vec<_> = input
+            .joints
+            .iter()
+            .map(|name| NamedJoint {
+                id: JointId(Uuid::new_v4()),
+                name: name.clone(),
+            })
+            .collect();
         let mut preserved = Vec::with_capacity(input.preserved.len());
         for item in &input.preserved {
             let owner = if item.owner == "robot" {
                 SourceOwner::Robot(robot_id)
             } else if let Some(name) = item.owner.strip_prefix("link:") {
-                let link = links.iter().find(|l| l.name == name)
+                let link = links
+                    .iter()
+                    .find(|l| l.name == name)
                     .ok_or_else(|| MappingError::UnknownOwner(item.owner.clone()))?;
                 SourceOwner::Link(link.id)
             } else if let Some(name) = item.owner.strip_prefix("joint:") {
-                let joint = joints.iter().find(|j| j.name == name)
+                let joint = joints
+                    .iter()
+                    .find(|j| j.name == name)
                     .ok_or_else(|| MappingError::UnknownOwner(item.owner.clone()))?;
                 SourceOwner::Joint(joint.id)
             } else {
                 return Err(MappingError::UnknownOwner(item.owner.clone()));
             };
-            preserved.push(MappedPreservedItem { owner, xml: item.xml.clone() });
+            preserved.push(MappedPreservedItem {
+                owner,
+                xml: item.xml.clone(),
+            });
         }
         Ok(Self {
-            schema_version: 1, robot_id, robot_name: input.robot_name.clone(),
-            links, joints, preserved,
+            schema_version: 1,
+            robot_id,
+            robot_name: input.robot_name.clone(),
+            links,
+            joints,
+            preserved,
         })
     }
 
@@ -106,8 +127,8 @@ impl SourceMappingDocument {
     }
 
     pub fn from_json(json: &str) -> Result<Self, MappingError> {
-        let document: Self = serde_json::from_str(json)
-            .map_err(|e| MappingError::Json(e.to_string()))?;
+        let document: Self =
+            serde_json::from_str(json).map_err(|e| MappingError::Json(e.to_string()))?;
         if document.schema_version != 1 {
             return Err(MappingError::UnsupportedSchema(document.schema_version));
         }
@@ -128,8 +149,11 @@ mod tests {
     fn preserved_items_bind_to_domain_ids() {
         let x = extended();
         let link_id = x.links.iter().find(|l| l.name == "base_link").unwrap().id;
-        assert!(x.preserved.iter().any(|p|
-            p.owner == SourceOwner::Link(link_id) && p.xml.contains("calibration")));
+        assert!(
+            x.preserved
+                .iter()
+                .any(|p| p.owner == SourceOwner::Link(link_id) && p.xml.contains("calibration"))
+        );
     }
 
     #[test]
@@ -151,23 +175,34 @@ mod tests {
     fn rejects_unknown_schema_version() {
         let mut x = extended();
         x.schema_version = 2;
-        assert_eq!(SourceMappingDocument::from_json(&x.to_json().unwrap()),
-            Err(MappingError::UnsupportedSchema(2)));
+        assert_eq!(
+            SourceMappingDocument::from_json(&x.to_json().unwrap()),
+            Err(MappingError::UnsupportedSchema(2))
+        );
     }
 
     #[test]
     fn rejects_duplicate_link_names() {
-        let mut x = crate::inspect_urdf("<robot name=\"r\"><link name=\"a\"/><link name=\"a\"/></robot>").unwrap();
-        assert!(matches!(SourceMappingDocument::from_inspection(&x),
-            Err(MappingError::DuplicateName(_))));
+        let mut x =
+            crate::inspect_urdf("<robot name=\"r\"><link name=\"a\"/><link name=\"a\"/></robot>")
+                .unwrap();
+        assert!(matches!(
+            SourceMappingDocument::from_inspection(&x),
+            Err(MappingError::DuplicateName(_))
+        ));
         x.links.clear();
     }
 
     #[test]
     fn rejects_unmapped_owner() {
         let mut x = crate::inspect_urdf("<robot name=\"r\"/>").unwrap();
-        x.preserved.push(crate::PreservedItem { owner: "link:missing".into(), xml: "x".into() });
-        assert_eq!(SourceMappingDocument::from_inspection(&x),
-            Err(MappingError::UnknownOwner("link:missing".into())));
+        x.preserved.push(crate::PreservedItem {
+            owner: "link:missing".into(),
+            xml: "x".into(),
+        });
+        assert_eq!(
+            SourceMappingDocument::from_inspection(&x),
+            Err(MappingError::UnknownOwner("link:missing".into()))
+        );
     }
 }

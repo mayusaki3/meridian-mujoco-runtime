@@ -1,6 +1,6 @@
 //! First-stage project URDF I/O: validate and retain an exact source copy.
 //! Canonical ROBOT-Model serialization is intentionally not implemented here.
-use robot_model_import::{inspect_urdf, InspectedUrdf, InspectError};
+use robot_model_import::{InspectError, InspectedUrdf, inspect_urdf};
 use std::{fs, io, path::Path};
 
 #[derive(Debug, Clone)]
@@ -10,7 +10,9 @@ pub struct ImportedUrdf {
 
 impl ImportedUrdf {
     pub fn parse(source: &str) -> Result<Self, InspectError> {
-        Ok(Self { inspection: inspect_urdf(source)? })
+        Ok(Self {
+            inspection: inspect_urdf(source)?,
+        })
     }
 
     /// Export is only valid while no model edits have been applied.
@@ -41,7 +43,13 @@ mod tests {
         let xml = "<robot name=\"test\"><link name=\"base\"/><vendor value=\"x\"/></robot>";
         let model = ImportedUrdf::parse(xml).unwrap();
         assert_eq!(model.unchanged_xml(), xml);
-        assert!(model.inspection.preserved.iter().any(|p| p.xml.contains("vendor")));
+        assert!(
+            model
+                .inspection
+                .preserved
+                .iter()
+                .any(|p| p.xml.contains("vendor"))
+        );
     }
 
     #[test]

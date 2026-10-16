@@ -1,9 +1,9 @@
 //! Application-owned, validated MJCF snapshot persistence.
 use robot_model_import::{
-    mjcf_bundle_reimport::{reimport_portable_mjcf_with_identity, BundleReimportResult},
-    mjcf_portable::PortableMjcfBundle,
-    mjcf_provenance::{map_included_elements, MjcfProvenance},
+    mjcf_bundle_reimport::{BundleReimportResult, reimport_portable_mjcf_with_identity},
     mjcf_model_bundle::from_mjcf_file,
+    mjcf_portable::PortableMjcfBundle,
+    mjcf_provenance::{MjcfProvenance, map_included_elements},
 };
 use serde::{Deserialize, Serialize};
 use std::{fs, io, path::Path};
@@ -20,7 +20,9 @@ pub struct MjcfProjectSnapshot {
 impl MjcfProjectSnapshot {
     pub fn validate(&self) -> io::Result<()> {
         self.bundle.validate().map_err(invalid)?;
-        self.provenance.validate_included_elements(&self.bundle).map_err(invalid)
+        self.provenance
+            .validate_included_elements(&self.bundle)
+            .map_err(invalid)
     }
 }
 
@@ -76,12 +78,19 @@ pub fn reimport_snapshot(
     let previous = load_snapshot(context)?
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "MJCF snapshot is missing"))?;
     let result = reimport_portable_mjcf_with_identity(
-        &previous.bundle, &previous.provenance, entry_file, source_root,
-    ).map_err(invalid)?;
-    save_snapshot(context, &MjcfProjectSnapshot {
-        bundle: result.bundle.clone(),
-        provenance: result.provenance.clone(),
-    })?;
+        &previous.bundle,
+        &previous.provenance,
+        entry_file,
+        source_root,
+    )
+    .map_err(invalid)?;
+    save_snapshot(
+        context,
+        &MjcfProjectSnapshot {
+            bundle: result.bundle.clone(),
+            provenance: result.provenance.clone(),
+        },
+    )?;
     Ok(result)
 }
 
@@ -91,11 +100,18 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    struct Fixture { root: PathBuf, context: ProjectContext }
+    struct Fixture {
+        root: PathBuf,
+        context: ProjectContext,
+    }
     impl Fixture {
         fn new() -> Self {
-            let id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-            let root = std::env::temp_dir().join(format!("meridian-mjcf-project-{}-{id}", std::process::id()));
+            let id = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root = std::env::temp_dir()
+                .join(format!("meridian-mjcf-project-{}-{id}", std::process::id()));
             fs::create_dir_all(&root).unwrap();
             let context = ProjectContext::new(root.join("project"));
             Self { root, context }
@@ -105,28 +121,48 @@ mod tests {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, xml).unwrap();
         }
-        fn entry(&self) -> PathBuf { self.root.join("sources/main.xml") }
-        fn source_root(&self) -> PathBuf { self.root.join("sources") }
+        fn entry(&self) -> PathBuf {
+            self.root.join("sources/main.xml")
+        }
+        fn source_root(&self) -> PathBuf {
+            self.root.join("sources")
+        }
     }
-    impl Drop for Fixture { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); } }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
 
     #[test]
     fn snapshot_roundtrip_preserves_ids_and_original_sources() {
         let f = Fixture::new();
-        f.put("main.xml", r#"<mujoco><include file="parts.xml"/></mujoco>"#);
+        f.put(
+            "main.xml",
+            r#"<mujoco><include file="parts.xml"/></mujoco>"#,
+        );
         f.put("parts.xml", r#"<mujocoinclude><worldbody><body name="b"><joint name="j"/></body></worldbody></mujocoinclude>"#);
         let saved = import_snapshot(&f.context, &f.entry(), &f.source_root()).unwrap();
         let loaded = load_snapshot(&f.context).unwrap().unwrap();
         assert_eq!(saved, loaded);
-        assert_eq!(saved.bundle.model.bodies[0].id, loaded.bundle.model.bodies[0].id);
+        assert_eq!(
+            saved.bundle.model.bodies[0].id,
+            loaded.bundle.model.bodies[0].id
+        );
         assert_eq!(saved.bundle.sources, loaded.bundle.sources);
     }
 
     #[test]
     fn reimport_preserves_ids_and_updates_provenance_atomically() {
         let f = Fixture::new();
-        f.put("main.xml", r#"<mujoco><include file="parts.xml"/></mujoco>"#);
-        f.put("parts.xml", r#"<mujocoinclude><worldbody><body name="b"/></worldbody></mujocoinclude>"#);
+        f.put(
+            "main.xml",
+            r#"<mujoco><include file="parts.xml"/></mujoco>"#,
+        );
+        f.put(
+            "parts.xml",
+            r#"<mujocoinclude><worldbody><body name="b"/></worldbody></mujocoinclude>"#,
+        );
         let original = import_snapshot(&f.context, &f.entry(), &f.source_root()).unwrap();
         f.put("parts.xml", r#"<mujocoinclude> <worldbody><body name="b"/><body name="new"/></worldbody></mujocoinclude>"#);
         let result = reimport_snapshot(&f.context, &f.entry(), &f.source_root()).unwrap();
@@ -134,14 +170,20 @@ mod tests {
         assert_eq!(result.bundle, loaded.bundle);
         assert_eq!(result.provenance, loaded.provenance);
         assert_eq!(loaded.bundle.model.model_id, original.bundle.model.model_id);
-        assert_eq!(loaded.bundle.model.bodies[0].id, original.bundle.model.bodies[0].id);
+        assert_eq!(
+            loaded.bundle.model.bodies[0].id,
+            original.bundle.model.bodies[0].id
+        );
         assert_eq!(result.plan.unresolved.len(), 1);
     }
 
     #[test]
     fn failed_reimport_and_invalid_snapshot_do_not_overwrite_previous() {
         let f = Fixture::new();
-        f.put("main.xml", r#"<mujoco><worldbody><body name="b"/></worldbody></mujoco>"#);
+        f.put(
+            "main.xml",
+            r#"<mujoco><worldbody><body name="b"/></worldbody></mujoco>"#,
+        );
         let original = import_snapshot(&f.context, &f.entry(), &f.source_root()).unwrap();
         let before = fs::read(snapshot_path(&f.context)).unwrap();
         f.put("main.xml", "<mujoco>");

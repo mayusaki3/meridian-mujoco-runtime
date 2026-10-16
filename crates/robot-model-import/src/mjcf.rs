@@ -43,12 +43,19 @@ pub enum MjcfError {
     DuplicateJoint(String),
     DuplicateTendon(String),
     DuplicateSite(String),
-    InvalidNumericAttribute { element: String, attribute: String, value: String },
+    InvalidNumericAttribute {
+        element: String,
+        attribute: String,
+        value: String,
+    },
     InvalidJointType(String),
     DuplicateDefaultClass(String),
     UnknownDefaultClass(String),
     UnresolvedInclude(String),
-    UnknownActuatorTarget { actuator: String, target: String },
+    UnknownActuatorTarget {
+        actuator: String,
+        target: String,
+    },
 }
 
 fn element<'a, 'input>(node: Node<'a, 'input>, name: &str) -> bool {
@@ -57,22 +64,41 @@ fn element<'a, 'input>(node: Node<'a, 'input>, name: &str) -> bool {
 
 // Validate explicit literal values only. MJCF defaults, compiler inference and
 // expression-like extensions are outside this read-only inspection stage.
-fn check_numeric(node: Node<'_, '_>, attr: &str, arity: usize, positive: bool, nonnegative: bool, ordered: bool) -> Result<(), MjcfError> {
-    let Some(raw) = node.attribute(attr) else { return Ok(()); };
-    let values: Vec<f64> = raw.split_whitespace().filter_map(|v| v.parse::<f64>().ok()).collect();
+fn check_numeric(
+    node: Node<'_, '_>,
+    attr: &str,
+    arity: usize,
+    positive: bool,
+    nonnegative: bool,
+    ordered: bool,
+) -> Result<(), MjcfError> {
+    let Some(raw) = node.attribute(attr) else {
+        return Ok(());
+    };
+    let values: Vec<f64> = raw
+        .split_whitespace()
+        .filter_map(|v| v.parse::<f64>().ok())
+        .collect();
     let valid = values.len() == arity
-        && values.iter().all(|v| v.is_finite() && (!positive || *v > 0.0) && (!nonnegative || *v >= 0.0))
+        && values
+            .iter()
+            .all(|v| v.is_finite() && (!positive || *v > 0.0) && (!nonnegative || *v >= 0.0))
         && (!ordered || values[0] <= values[1]);
     if !valid {
         return Err(MjcfError::InvalidNumericAttribute {
-            element: node.tag_name().name().to_owned(), attribute: attr.to_owned(), value: raw.to_owned(),
+            element: node.tag_name().name().to_owned(),
+            attribute: attr.to_owned(),
+            value: raw.to_owned(),
         });
     }
     Ok(())
 }
 
 fn validate_explicit_physics(root: Node<'_, '_>) -> Result<(), MjcfError> {
-    for node in root.descendants().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
+    for node in root
+        .descendants()
+        .filter(|n| n.is_element() && n.tag_name().namespace().is_none())
+    {
         match node.tag_name().name() {
             "body" | "geom" => {
                 check_numeric(node, "mass", 1, true, false, false)?;
@@ -91,7 +117,8 @@ fn validate_explicit_physics(root: Node<'_, '_>) -> Result<(), MjcfError> {
                 check_numeric(node, "armature", 1, false, true, false)?;
                 check_numeric(node, "frictionloss", 1, false, true, false)?;
             }
-            "motor" | "position" | "velocity" | "general" | "intvelocity" | "damper" | "adhesion" | "cylinder" | "muscle" => {
+            "motor" | "position" | "velocity" | "general" | "intvelocity" | "damper"
+            | "adhesion" | "cylinder" | "muscle" => {
                 check_numeric(node, "ctrlrange", 2, false, false, true)?;
                 check_numeric(node, "forcerange", 2, false, false, true)?;
                 check_numeric(node, "kp", 1, false, true, false)?;
@@ -114,8 +141,13 @@ fn validate_default_classes(root: Node<'_, '_>) -> Result<(), MjcfError> {
             }
         }
     }
-    for node in root.descendants().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
-        if element(node, "default") { continue; }
+    for node in root
+        .descendants()
+        .filter(|n| n.is_element() && n.tag_name().namespace().is_none())
+    {
+        if element(node, "default") {
+            continue;
+        }
         for attr in ["class", "childclass"] {
             if let Some(class) = node.attribute(attr) {
                 if !classes.contains(class) {
@@ -131,8 +163,14 @@ fn validate_default_classes(root: Node<'_, '_>) -> Result<(), MjcfError> {
 /// complete model. The legacy inspector retains read-only partial inspection.
 pub fn inspect_mjcf_standalone(xml: &str) -> Result<InspectedMjcf, MjcfError> {
     let doc = Document::parse(xml).map_err(|e| MjcfError::InvalidXml(e.to_string()))?;
-    for node in doc.root_element().descendants().filter(|n| element(*n, "include")) {
-        return Err(MjcfError::UnresolvedInclude(node.attribute("file").unwrap_or("").to_owned()));
+    for node in doc
+        .root_element()
+        .descendants()
+        .filter(|n| element(*n, "include"))
+    {
+        return Err(MjcfError::UnresolvedInclude(
+            node.attribute("file").unwrap_or("").to_owned(),
+        ));
     }
     inspect_mjcf(xml)
 }
@@ -140,12 +178,17 @@ pub fn inspect_mjcf_standalone(xml: &str) -> Result<InspectedMjcf, MjcfError> {
 pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
     let doc = Document::parse(xml).map_err(|e| MjcfError::InvalidXml(e.to_string()))?;
     let root = doc.root_element();
-    if !element(root, "mujoco") { return Err(MjcfError::InvalidRoot); }
+    if !element(root, "mujoco") {
+        return Err(MjcfError::InvalidRoot);
+    }
     validate_explicit_physics(root)?;
     validate_default_classes(root)?;
     let mut result = InspectedMjcf {
         model_name: root.attribute("model").map(str::to_owned),
-        bodies: vec![], joints: vec![], actuators: vec![], tendons: vec![],
+        bodies: vec![],
+        joints: vec![],
+        actuators: vec![],
+        tendons: vec![],
         original_xml: xml.to_owned(),
     };
     let mut body_names = HashSet::new();
@@ -161,8 +204,13 @@ pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
             }
         }
         for body in worldbody.descendants().filter(|n| element(*n, "body")) {
-            let body_name = body.attribute("name").map(str::to_owned).unwrap_or_else(|| format!("@{}", body.range().start));
-            if !body_names.insert(body_name.clone()) { return Err(MjcfError::DuplicateBody(body_name)); }
+            let body_name = body
+                .attribute("name")
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("@{}", body.range().start));
+            if !body_names.insert(body_name.clone()) {
+                return Err(MjcfError::DuplicateBody(body_name));
+            }
             result.bodies.push(body_name.clone());
             for joint in body.children().filter(|n| element(*n, "joint")) {
                 let kind = joint.attribute("type").unwrap_or("hinge").to_owned();
@@ -171,33 +219,57 @@ pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
                 }
                 let name = joint.attribute("name").map(str::to_owned);
                 if let Some(ref n) = name {
-                    if !joint_names.insert(n.clone()) { return Err(MjcfError::DuplicateJoint(n.clone())); }
+                    if !joint_names.insert(n.clone()) {
+                        return Err(MjcfError::DuplicateJoint(n.clone()));
+                    }
                 }
-                result.joints.push(MjcfJoint { name, joint_type: kind, body: body_name.clone() });
+                result.joints.push(MjcfJoint {
+                    name,
+                    joint_type: kind,
+                    body: body_name.clone(),
+                });
             }
         }
     }
     if let Some(tendon) = root.children().find(|n| element(*n, "tendon")) {
-        for node in tendon.children().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
+        for node in tendon
+            .children()
+            .filter(|n| n.is_element() && n.tag_name().namespace().is_none())
+        {
             if let Some(name) = node.attribute("name") {
-                if !tendon_names.insert(name.to_owned()) { return Err(MjcfError::DuplicateTendon(name.to_owned())); }
+                if !tendon_names.insert(name.to_owned()) {
+                    return Err(MjcfError::DuplicateTendon(name.to_owned()));
+                }
                 result.tendons.push(name.to_owned());
             }
         }
     }
     if let Some(actuators) = root.children().find(|n| element(*n, "actuator")) {
-        for node in actuators.children().filter(|n| n.is_element() && n.tag_name().namespace().is_none()) {
+        for node in actuators
+            .children()
+            .filter(|n| n.is_element() && n.tag_name().namespace().is_none())
+        {
             let name = node.attribute("name").map(str::to_owned);
-            let label = name.clone().unwrap_or_else(|| format!("@{}", node.range().start));
-            for (attr, known) in [("joint", &joint_names), ("tendon", &tendon_names), ("site", &site_names)] {
+            let label = name
+                .clone()
+                .unwrap_or_else(|| format!("@{}", node.range().start));
+            for (attr, known) in [
+                ("joint", &joint_names),
+                ("tendon", &tendon_names),
+                ("site", &site_names),
+            ] {
                 if let Some(target) = node.attribute(attr) {
                     if !known.contains(target) {
-                        return Err(MjcfError::UnknownActuatorTarget { actuator: label, target: target.to_owned() });
+                        return Err(MjcfError::UnknownActuatorTarget {
+                            actuator: label,
+                            target: target.to_owned(),
+                        });
                     }
                 }
             }
             result.actuators.push(MjcfActuator {
-                name, kind: node.tag_name().name().to_owned(),
+                name,
+                kind: node.tag_name().name().to_owned(),
                 joint: node.attribute("joint").map(str::to_owned),
                 tendon: node.attribute("tendon").map(str::to_owned),
                 site: node.attribute("site").map(str::to_owned),
@@ -213,7 +285,9 @@ pub fn inspect_mjcf(xml: &str) -> Result<InspectedMjcf, MjcfError> {
     Ok(result)
 }
 
-pub fn export_unchanged_mjcf(model: &InspectedMjcf) -> &str { &model.original_xml }
+pub fn export_unchanged_mjcf(model: &InspectedMjcf) -> &str {
+    &model.original_xml
+}
 
 #[cfg(test)]
 mod tests {
@@ -224,7 +298,9 @@ mod tests {
         include_str!("../../../tests/fixtures/mjcf-regression/valid/03_slide_position.xml"),
         include_str!("../../../tests/fixtures/mjcf-regression/valid/04_velocity_general.xml"),
         include_str!("../../../tests/fixtures/mjcf-regression/valid/05_tendon_actuator.xml"),
-        include_str!("../../../tests/fixtures/mjcf-regression/valid/06_defaults_contact_sensor.xml"),
+        include_str!(
+            "../../../tests/fixtures/mjcf-regression/valid/06_defaults_contact_sensor.xml"
+        ),
         include_str!("../../../tests/fixtures/mjcf-regression/valid/07_extension_comments.xml"),
         include_str!("../../../tests/fixtures/mjcf-regression/valid/08_nested_bodies_inertial.xml"),
     ];
@@ -249,60 +325,119 @@ mod tests {
     #[test]
     fn duplicate_named_joints_are_rejected() {
         let xml = r#"<mujoco><worldbody><body name="a"><joint name="j"/></body><body name="b"><joint name="j"/></body></worldbody></mujoco>"#;
-        assert_eq!(inspect_mjcf(xml), Err(MjcfError::DuplicateJoint("j".into())));
+        assert_eq!(
+            inspect_mjcf(xml),
+            Err(MjcfError::DuplicateJoint("j".into()))
+        );
     }
     #[test]
     fn duplicate_named_tendons_are_rejected() {
         let xml = r#"<mujoco><tendon><fixed name="t"/><fixed name="t"/></tendon></mujoco>"#;
-        assert_eq!(inspect_mjcf(xml), Err(MjcfError::DuplicateTendon("t".into())));
+        assert_eq!(
+            inspect_mjcf(xml),
+            Err(MjcfError::DuplicateTendon("t".into()))
+        );
     }
     #[test]
     fn missing_actuator_site_is_rejected() {
         let xml = r#"<mujoco><worldbody><body name="a"/></worldbody><actuator><motor name="m" site="missing"/></actuator></mujoco>"#;
-        assert!(matches!(inspect_mjcf(xml), Err(MjcfError::UnknownActuatorTarget { target, .. }) if target == "missing"));
+        assert!(
+            matches!(inspect_mjcf(xml), Err(MjcfError::UnknownActuatorTarget { target, .. }) if target == "missing")
+        );
     }
     #[test]
     fn duplicate_sites_and_valid_site_actuator() {
         let valid = r#"<mujoco><worldbody><site name="anchor"/><body name="a"><site name="tip"/></body></worldbody><actuator><motor name="m" site="tip"/></actuator></mujoco>"#;
-        assert_eq!(inspect_mjcf(valid).unwrap().actuators[0].site.as_deref(), Some("tip"));
+        assert_eq!(
+            inspect_mjcf(valid).unwrap().actuators[0].site.as_deref(),
+            Some("tip")
+        );
         let duplicate = r#"<mujoco><worldbody><site name="s"/><body name="a"><site name="s"/></body></worldbody></mujoco>"#;
-        assert_eq!(inspect_mjcf(duplicate), Err(MjcfError::DuplicateSite("s".into())));
+        assert_eq!(
+            inspect_mjcf(duplicate),
+            Err(MjcfError::DuplicateSite("s".into()))
+        );
     }
     #[test]
     fn rejects_invalid_explicit_physics_values() {
         for (xml, attribute) in [
-            (r#"<mujoco><worldbody><body><inertial mass="-1"/></body></worldbody></mujoco>"#, "mass"),
-            (r#"<mujoco><worldbody><body><inertial diaginertia="1 0 1"/></body></worldbody></mujoco>"#, "diaginertia"),
-            (r#"<mujoco><worldbody><body><joint range="2 1"/></body></worldbody></mujoco>"#, "range"),
-            (r#"<mujoco><worldbody><body><joint damping="-0.2"/></body></worldbody></mujoco>"#, "damping"),
-            (r#"<mujoco><worldbody><body><joint armature="NaN"/></body></worldbody></mujoco>"#, "armature"),
-            (r#"<mujoco><actuator><motor ctrlrange="1 0"/></actuator></mujoco>"#, "ctrlrange"),
-            (r#"<mujoco><actuator><position kp="-1"/></actuator></mujoco>"#, "kp"),
-            (r#"<mujoco><actuator><velocity kv="infinity"/></actuator></mujoco>"#, "kv"),
-            (r#"<mujoco><actuator><motor forcerange="1 nope"/></actuator></mujoco>"#, "forcerange"),
+            (
+                r#"<mujoco><worldbody><body><inertial mass="-1"/></body></worldbody></mujoco>"#,
+                "mass",
+            ),
+            (
+                r#"<mujoco><worldbody><body><inertial diaginertia="1 0 1"/></body></worldbody></mujoco>"#,
+                "diaginertia",
+            ),
+            (
+                r#"<mujoco><worldbody><body><joint range="2 1"/></body></worldbody></mujoco>"#,
+                "range",
+            ),
+            (
+                r#"<mujoco><worldbody><body><joint damping="-0.2"/></body></worldbody></mujoco>"#,
+                "damping",
+            ),
+            (
+                r#"<mujoco><worldbody><body><joint armature="NaN"/></body></worldbody></mujoco>"#,
+                "armature",
+            ),
+            (
+                r#"<mujoco><actuator><motor ctrlrange="1 0"/></actuator></mujoco>"#,
+                "ctrlrange",
+            ),
+            (
+                r#"<mujoco><actuator><position kp="-1"/></actuator></mujoco>"#,
+                "kp",
+            ),
+            (
+                r#"<mujoco><actuator><velocity kv="infinity"/></actuator></mujoco>"#,
+                "kv",
+            ),
+            (
+                r#"<mujoco><actuator><motor forcerange="1 nope"/></actuator></mujoco>"#,
+                "forcerange",
+            ),
         ] {
-            assert!(matches!(inspect_mjcf(xml), Err(MjcfError::InvalidNumericAttribute { attribute: a, .. }) if a == attribute), "{xml}");
+            assert!(
+                matches!(inspect_mjcf(xml), Err(MjcfError::InvalidNumericAttribute { attribute: a, .. }) if a == attribute),
+                "{xml}"
+            );
         }
     }
     #[test]
     fn accepts_missing_and_valid_explicit_physics_values() {
         let xml = r#"<mujoco><default><joint damping="0.2" armature="0.01"/></default><worldbody><body name="b"><joint range="-1 1" damping="0"/><geom mass="0.5"/><inertial mass="1" diaginertia="0.1 0.2 0.3"/></body></worldbody><actuator><motor ctrlrange="-2 2" forcerange="-10 10"/></actuator></mujoco>"#;
         assert!(inspect_mjcf(xml).is_ok());
-        assert!(inspect_mjcf(r#"<mujoco><worldbody><body name="b"><joint/></body></worldbody></mujoco>"#).is_ok());
+        assert!(
+            inspect_mjcf(
+                r#"<mujoco><worldbody><body name="b"><joint/></body></worldbody></mujoco>"#
+            )
+            .is_ok()
+        );
     }
     #[test]
     fn default_classes_validate_references_and_duplicates() {
         let valid = r#"<mujoco><default><joint damping="0.2"/><default class="soft"><joint damping="0.1"/></default></default><worldbody><body childclass="soft"><joint name="j" class="soft"/></body></worldbody></mujoco>"#;
         assert!(inspect_mjcf(valid).is_ok());
         let missing = r#"<mujoco><worldbody><body childclass="absent"/></worldbody></mujoco>"#;
-        assert_eq!(inspect_mjcf(missing), Err(MjcfError::UnknownDefaultClass("absent".into())));
-        let duplicate = r#"<mujoco><default><default class="same"/><default class="same"/></default></mujoco>"#;
-        assert_eq!(inspect_mjcf(duplicate), Err(MjcfError::DuplicateDefaultClass("same".into())));
+        assert_eq!(
+            inspect_mjcf(missing),
+            Err(MjcfError::UnknownDefaultClass("absent".into()))
+        );
+        let duplicate =
+            r#"<mujoco><default><default class="same"/><default class="same"/></default></mujoco>"#;
+        assert_eq!(
+            inspect_mjcf(duplicate),
+            Err(MjcfError::DuplicateDefaultClass("same".into()))
+        );
     }
     #[test]
     fn standalone_inspection_rejects_unresolved_include() {
         let xml = r#"<mujoco><include file="parts.xml"/><worldbody/></mujoco>"#;
-        assert_eq!(inspect_mjcf_standalone(xml), Err(MjcfError::UnresolvedInclude("parts.xml".into())));
+        assert_eq!(
+            inspect_mjcf_standalone(xml),
+            Err(MjcfError::UnresolvedInclude("parts.xml".into()))
+        );
         assert!(inspect_mjcf(xml).is_ok()); // partial read-only inspection remains available
         assert!(inspect_mjcf_standalone(VALID[0]).is_ok());
     }
@@ -311,10 +446,20 @@ mod tests {
         for xml in [
             include_str!("../../../tests/fixtures/mjcf-regression/invalid/01_malformed_xml.xml"),
             include_str!("../../../tests/fixtures/mjcf-regression/invalid/02_wrong_root.xml"),
-            include_str!("../../../tests/fixtures/mjcf-regression/invalid/03_missing_actuator_target.xml"),
-            include_str!("../../../tests/fixtures/mjcf-regression/invalid/04_duplicate_body_name.xml"),
-            include_str!("../../../tests/fixtures/mjcf-regression/invalid/05_unknown_joint_type.xml"),
-            include_str!("../../../tests/fixtures/mjcf-regression/invalid/06_missing_tendon_reference.xml"),
-        ] { assert!(inspect_mjcf(xml).is_err(), "unexpectedly accepted: {xml}"); }
+            include_str!(
+                "../../../tests/fixtures/mjcf-regression/invalid/03_missing_actuator_target.xml"
+            ),
+            include_str!(
+                "../../../tests/fixtures/mjcf-regression/invalid/04_duplicate_body_name.xml"
+            ),
+            include_str!(
+                "../../../tests/fixtures/mjcf-regression/invalid/05_unknown_joint_type.xml"
+            ),
+            include_str!(
+                "../../../tests/fixtures/mjcf-regression/invalid/06_missing_tendon_reference.xml"
+            ),
+        ] {
+            assert!(inspect_mjcf(xml).is_err(), "unexpectedly accepted: {xml}");
+        }
     }
 }

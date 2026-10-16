@@ -1,19 +1,22 @@
-mod urdf_io;
-mod runtime_project;
-mod robot_catalog;
-mod mjcf_project;
 mod localized_errors;
+mod mjcf_project;
+mod robot_catalog;
+mod runtime_project;
 #[cfg(test)]
 mod urdf_fixture_tests;
+mod urdf_io;
 
-use std::{path::PathBuf, sync::{Arc, Mutex}};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use workflow_ide_framework::{
+    LayoutConfig, PanelDefinition, PanelKind,
     command::{CommandDefinition, MenuItemDefinition},
     project::ProjectContext,
     project_event::ProjectEventKind,
     project_panel::{ProjectPanelModel, ProjectPanelNode},
     resource_registry::ResourceRegistry,
-    PanelDefinition, PanelKind, LayoutConfig,
 };
 
 fn data_menu_import_item() -> MenuItemDefinition {
@@ -33,7 +36,10 @@ mod menu_access_tests {
         let item = data_menu_import_item();
         assert_eq!(item.access_key, Some('D'));
         assert!(item.requires_stored_project);
-        assert_eq!(item.top_level_placement, MenuPlacement::After("menu.file".into()));
+        assert_eq!(
+            item.top_level_placement,
+            MenuPlacement::After("menu.file".into())
+        );
     }
 
     #[test]
@@ -46,17 +52,30 @@ mod menu_access_tests {
             "meridian.menu.mjcf.reimport",
         ] {
             let expected = format!("}}).label_key(\"{key}\").requires_stored_project())");
-            assert!(source.contains(&expected), "{key} must require a stored project");
+            assert!(
+                source.contains(&expected),
+                "{key} must require a stored project"
+            );
         }
     }
 
     #[test]
     fn data_menu_translations_do_not_duplicate_access_key() {
         for (source, expected) in [
-            (include_str!("../resources/meridian-locales/en-US.toml"), "Data"),
-            (include_str!("../resources/meridian-locales/ja-JP.toml"), "データ"),
+            (
+                include_str!("../resources/meridian-locales/en-US.toml"),
+                "Data",
+            ),
+            (
+                include_str!("../resources/meridian-locales/ja-JP.toml"),
+                "データ",
+            ),
         ] {
-            assert!(source.lines().any(|line| line.trim() == format!("\"meridian.menu.data\" = \"{expected}\"")));
+            assert!(
+                source
+                    .lines()
+                    .any(|line| line.trim() == format!("\"meridian.menu.data\" = \"{expected}\""))
+            );
         }
     }
 }

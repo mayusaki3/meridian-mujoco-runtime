@@ -8,9 +8,11 @@ use workflow_ide_framework::{
 };
 
 use crate::urdf_io::ImportedUrdf;
+use crate::robot_catalog::RobotCatalog;
 
 const DATA_VERSION: &str = "urdf-source-v1";
 const SOURCE_FILE: &str = "robot-source.urdf";
+const CATALOG_FILE: &str = "robot-catalog.json";
 
 #[derive(Default)]
 pub struct RuntimeProjectAdapter;
@@ -18,6 +20,28 @@ pub struct RuntimeProjectAdapter;
 impl RuntimeProjectAdapter {
     fn source_path(context: &ProjectContext) -> std::path::PathBuf {
         context.application_directory().join(SOURCE_FILE)
+    }
+
+    fn catalog_path(context: &ProjectContext) -> std::path::PathBuf {
+        context.application_directory().join(CATALOG_FILE)
+    }
+
+    /// Persist a validated catalog with atomic replacement.
+    pub fn save_catalog(context: &ProjectContext, catalog: &RobotCatalog) -> io::Result<()> {
+        let json = catalog.to_json()?;
+        workflow_ide_framework::project_io::atomic_write(
+            &Self::catalog_path(context),
+            json.as_bytes(),
+        )
+    }
+
+    /// Missing catalog is a legacy project, not a migration request.
+    pub fn load_catalog(context: &ProjectContext) -> io::Result<RobotCatalog> {
+        match fs::read_to_string(Self::catalog_path(context)) {
+            Ok(json) => RobotCatalog::from_json(&json),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(RobotCatalog::default()),
+            Err(error) => Err(error),
+        }
     }
 
     /// Stage a validated URDF source into the application-owned project directory.
@@ -68,7 +92,10 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
         &mut self,
         context: &ProjectContext,
     ) -> Result<ProjectDataConsistency, Self::Error> {
-        match Self::load_source(context).and_then(|_| crate::mjcf_project::load_snapshot(context).map(|_| ())) {
+        match Self::load_source(context)
+            .and_then(|_| crate::mjcf_project::load_snapshot(context).map(|_| ()))
+            .and_then(|_| Self::load_catalog(context).map(|_| ()))
+        {
             Ok(_) => Ok(ProjectDataConsistency::Consistent),
             Err(error) => Ok(ProjectDataConsistency::Inconsistent {
                 reason: Some(error.to_string()),
@@ -87,6 +114,7 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
         fs::create_dir_all(context.application_directory())?;
         Self::load_source(context)?;
         crate::mjcf_project::load_snapshot(context)?;
+        Self::load_catalog(context)?;
         Ok(ApplicationSaveResult { data_version: Some(DATA_VERSION.into()) })
     }
 
@@ -103,6 +131,12 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
         }
         if let Some(snapshot) = crate::mjcf_project::load_snapshot(source.unwrap_or(destination))? {
             crate::mjcf_project::save_snapshot(destination, &snapshot)?;
+        }
+        if let Some(source) = source {
+            if Self::catalog_path(source).exists() {
+                let catalog = Self::load_catalog(source)?;
+                Self::save_catalog(destination, &catalog)?;
+            }
         }
         self.save_project_data(destination, save_id)
     }

@@ -1,5 +1,6 @@
 mod urdf_io;
 mod runtime_project;
+mod robot_catalog;
 mod mjcf_project;
 mod localized_errors;
 #[cfg(test)]

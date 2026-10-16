@@ -39,8 +39,13 @@ fn mer_res_tc_003_duplicate_allocates_new_identity() {
 #[test]
 fn mer_res_tc_004_shared_origin_does_not_merge() {
     let mut catalog = RobotCatalog::default();
-    let origin = RobotOrigin { source_namespace: "vendor".into(), source_id: "model".into() };
-    let a = catalog.create_with_origin("A", Some(origin.clone())).unwrap();
+    let origin = RobotOrigin {
+        source_namespace: "vendor".into(),
+        source_id: "model".into(),
+    };
+    let a = catalog
+        .create_with_origin("A", Some(origin.clone()))
+        .unwrap();
     let b = catalog.create_with_origin("B", Some(origin)).unwrap();
     assert_ne!(a, b);
     assert_eq!(catalog.robots().len(), 2);
@@ -72,11 +77,16 @@ fn mer_res_tc_006_same_id_allowed_in_independent_projects() {
 fn mer_res_tc_008_representation_stores_registry_id_not_path() {
     let mut catalog = RobotCatalog::default();
     let id = catalog.create("A").unwrap();
-    catalog.add_representation(&id, RobotRepresentation {
-        registry_resource_id: "resource-1".into(),
-        format: "urdf".into(),
-        role: "exchange".into(),
-    }).unwrap();
+    catalog
+        .add_representation(
+            &id,
+            RobotRepresentation {
+                registry_resource_id: "resource-1".into(),
+                format: "urdf".into(),
+                role: "exchange".into(),
+            },
+        )
+        .unwrap();
     let json = catalog.to_json().unwrap();
     assert!(json.contains("registry_resource_id"));
     assert!(!json.contains("\\\"path\\\""));

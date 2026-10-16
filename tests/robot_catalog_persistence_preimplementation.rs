@@ -11,7 +11,7 @@ mod runtime_project;
 
 use robot_catalog::RobotCatalog;
 use runtime_project::RuntimeProjectAdapter;
-use std::{fs, io};
+use std::fs;
 use workflow_ide_framework::{
     project::ProjectContext,
     project_adapter::ApplicationProjectAdapter,
@@ -70,7 +70,8 @@ fn mer_res_tc_012_invalid_catalog_does_not_replace_previous_data() {
     let file = project.application_directory().join("robot-catalog.json");
     let previous = fs::read(&file).unwrap();
     let mut corrupted: serde_json::Value = serde_json::from_slice(&previous).unwrap();
-    corrupted["robots"].as_array_mut().unwrap().push(corrupted["robots"][0].clone());
+    let duplicate = corrupted["robots"][0].clone();
+    corrupted["robots"].as_array_mut().unwrap().push(duplicate);
     let invalid = RobotCatalog::from_json(&corrupted.to_string());
     assert!(invalid.is_err());
     assert_eq!(fs::read(&file).unwrap(), previous);

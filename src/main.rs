@@ -12,8 +12,8 @@ use std::{
 };
 use workflow_ide_framework::{
     LayoutConfig, PanelDefinition, PanelKind,
-    logging,
     command::{CommandDefinition, MenuItemDefinition},
+    logging,
     project::ProjectContext,
     project_event::ProjectEventKind,
     project_panel::{ProjectPanelModel, ProjectPanelNode},

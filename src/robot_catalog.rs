@@ -140,7 +140,7 @@ impl RobotCatalog {
     }
 
     pub fn from_json(json: &str) -> io::Result<Self> {
-        let catalog: Self = serde_json::from_str(json).map_err(invalid)?;
+        let catalog: Self = serde_json::from_str(json).map_err(|error| invalid(error.to_string()))?;
         catalog.validate()?;
         Ok(catalog)
     }

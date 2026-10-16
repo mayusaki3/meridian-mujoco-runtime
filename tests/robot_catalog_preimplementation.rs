@@ -101,3 +101,15 @@ fn mer_res_tc_011_no_implicit_urdf_mjcf_merging() {
     assert_ne!(urdf, mjcf);
     assert_eq!(catalog.robots().len(), 2);
 }
+
+#[test]
+fn mer_res_tc_013_generated_ids_are_canonical_uuid_v4() {
+    use uuid::{Uuid, Version};
+    let mut catalog = RobotCatalog::default();
+    for index in 0..32 {
+        let id = catalog.create(&format!("Robot {index}")).unwrap();
+        let parsed = Uuid::parse_str(&id).expect("Robot ID must parse as UUID");
+        assert_eq!(parsed.get_version(), Some(Version::Random));
+        assert_eq!(id, parsed.hyphenated().to_string());
+    }
+}

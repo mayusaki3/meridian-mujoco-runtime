@@ -12,6 +12,7 @@ use std::{
 };
 use workflow_ide_framework::{
     LayoutConfig, PanelDefinition, PanelKind,
+    logging,
     command::{CommandDefinition, MenuItemDefinition},
     project::ProjectContext,
     project_event::ProjectEventKind,
@@ -120,6 +121,8 @@ fn main() {
         }
     })
     .command(CommandDefinition::new("runtime.urdf.import", "URDFインポート...", move || {
+        let capture = logging::dialog_on_key("meridian.urdf.import.result.title");
+        let _operation = capture.span().enter();
         let root = import_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
             workflow_ide_framework::tracing::warn!(target: "meridian::urdf", message = %workflow_ide_framework::localization::text("meridian.urdf.import.no_project"));
@@ -138,6 +141,8 @@ fn main() {
     }).label_key("meridian.menu.urdf.import").requires_stored_project())
     .menu_item(data_menu_import_item())
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
+        let capture = logging::dialog_on_key("meridian.urdf.export.result.title");
+        let _operation = capture.span().enter();
         let root = export_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
             workflow_ide_framework::tracing::warn!(target: "meridian::urdf", message = %workflow_ide_framework::localization::text("meridian.urdf.export.no_project"));
@@ -165,6 +170,8 @@ fn main() {
     }).label_key("meridian.menu.urdf.export").requires_stored_project())
     .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.urdf.export"))
     .command(CommandDefinition::new("runtime.mjcf.import", "MJCFインポート...", move || {
+        let capture = logging::dialog_on_key("meridian.mjcf.import.result.title");
+        let _operation = capture.span().enter();
         let root = mjcf_import_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
             workflow_ide_framework::tracing::warn!(target: "meridian::mjcf", message = %workflow_ide_framework::localization::text("meridian.mjcf.import.no_project"));
@@ -196,6 +203,8 @@ fn main() {
     }).label_key("meridian.menu.mjcf.import").requires_stored_project())
     .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.mjcf.import"))
     .command(CommandDefinition::new("runtime.mjcf.reimport", "MJCF再インポート...", move || {
+        let capture = logging::dialog_on_key("meridian.mjcf.reimport.result.title");
+        let _operation = capture.span().enter();
         let root = mjcf_reimport_project.lock().ok().and_then(|active| active.clone());
         let Some(root) = root else {
             workflow_ide_framework::tracing::warn!(target: "meridian::mjcf", message = %workflow_ide_framework::localization::text("meridian.mjcf.reimport.no_project"));

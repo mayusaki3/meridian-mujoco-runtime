@@ -147,16 +147,11 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
     fn temporary_context() -> ProjectContext {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
         ProjectContext::new(std::env::temp_dir().join(format!(
-            "meridian-project-test-{}-{unique}",
-            std::process::id()
+            "meridian-project-test-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
         )))
     }
 

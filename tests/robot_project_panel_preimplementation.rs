@@ -40,8 +40,12 @@ fn mer_pp_tc_002_two_robots_have_distinct_node_ids_and_correct_robot_ids() {
     let robots = robot_nodes(&nodes);
     assert_eq!(robots.len(), 2);
     assert_ne!(robots[0].id, robots[1].id);
-    assert!(matches!(&robots[0].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &first));
-    assert!(matches!(&robots[1].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &second));
+    assert!(
+        matches!(&robots[0].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &first)
+    );
+    assert!(
+        matches!(&robots[1].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &second)
+    );
 }
 
 #[test]
@@ -53,23 +57,32 @@ fn mer_pp_tc_003_rename_keeps_robot_and_node_identity() {
     let after = catalog_nodes(&catalog);
     assert_eq!(robot_nodes(&before)[0].id, robot_nodes(&after)[0].id);
     assert_ne!(robot_nodes(&before)[0].label, robot_nodes(&after)[0].label);
-    assert!(matches!(&robot_nodes(&after)[0].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &id));
+    assert!(
+        matches!(&robot_nodes(&after)[0].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &id)
+    );
 }
 
 #[test]
 fn mer_pp_tc_004_representation_references_registry_id_not_robot_id() {
     let mut catalog = RobotCatalog::default();
     let robot_id = catalog.create("robot").unwrap();
-    catalog.add_representation(&robot_id, RobotRepresentation {
-        registry_resource_id: "registry-urdf-01".into(),
-        format: "urdf".into(),
-        role: "source".into(),
-    }).unwrap();
+    catalog
+        .add_representation(
+            &robot_id,
+            RobotRepresentation {
+                registry_resource_id: "registry-urdf-01".into(),
+                format: "urdf".into(),
+                role: "source".into(),
+            },
+        )
+        .unwrap();
     let nodes = catalog_nodes(&catalog);
     let reps = &robot_nodes(&nodes)[0].children;
     assert_eq!(reps.len(), 1);
     assert_eq!(reps[0].children.len(), 1);
-    assert!(matches!(&reps[0].children[0].kind, AppPanelNodeKind::RegisteredResource { registry_resource_id } if registry_resource_id == "registry-urdf-01"));
+    assert!(
+        matches!(&reps[0].children[0].kind, AppPanelNodeKind::RegisteredResource { registry_resource_id } if registry_resource_id == "registry-urdf-01")
+    );
     assert_ne!(robot_id, "registry-urdf-01");
 }
 
@@ -79,11 +92,16 @@ fn mer_pp_tc_005_same_registry_id_may_appear_under_two_robots() {
     let a = catalog.create("a").unwrap();
     let b = catalog.create("b").unwrap();
     for id in [&a, &b] {
-        catalog.add_representation(id, RobotRepresentation {
-            registry_resource_id: "shared-file".into(),
-            format: "urdf".into(),
-            role: "source".into(),
-        }).unwrap();
+        catalog
+            .add_representation(
+                id,
+                RobotRepresentation {
+                    registry_resource_id: "shared-file".into(),
+                    format: "urdf".into(),
+                    role: "source".into(),
+                },
+            )
+            .unwrap();
     }
     let nodes = catalog_nodes(&catalog);
     let robots = robot_nodes(&nodes);
@@ -92,7 +110,10 @@ fn mer_pp_tc_005_same_registry_id_may_appear_under_two_robots() {
     assert_ne!(left.id, right.id);
     assert_eq!(left.kind, right.kind);
     let mut registry = ResourceRegistry::default();
-    registry.register("shared-file", ResourceReference::new(ResourceScope::Project, "shared.urdf").unwrap());
+    registry.register(
+        "shared-file",
+        ResourceReference::new(ResourceScope::Project, "shared.urdf").unwrap(),
+    );
     assert!(build_application_project_tree(&nodes, &registry).is_ok());
 }
 
@@ -100,14 +121,21 @@ fn mer_pp_tc_005_same_registry_id_may_appear_under_two_robots() {
 fn mer_pp_tc_006_unknown_registry_reference_is_not_silently_registered() {
     let mut catalog = RobotCatalog::default();
     let id = catalog.create("robot").unwrap();
-    catalog.add_representation(&id, RobotRepresentation {
-        registry_resource_id: "missing-id".into(),
-        format: "mjcf".into(),
-        role: "generated".into(),
-    }).unwrap();
+    catalog
+        .add_representation(
+            &id,
+            RobotRepresentation {
+                registry_resource_id: "missing-id".into(),
+                format: "mjcf".into(),
+                role: "generated".into(),
+            },
+        )
+        .unwrap();
     let registry = ResourceRegistry::default();
     let result = build_application_project_tree(&catalog_nodes(&catalog), &registry);
-    assert!(matches!(result, Err(workflow_ide_framework::project_panel_api::AppPanelTreeError::UnknownRegisteredResource(ref id)) if id == "missing-id"));
+    assert!(
+        matches!(result, Err(workflow_ide_framework::project_panel_api::AppPanelTreeError::UnknownRegisteredResource(ref id)) if id == "missing-id")
+    );
     assert!(registry.entries().is_empty());
 }
 
@@ -115,9 +143,15 @@ fn mer_pp_tc_006_unknown_registry_reference_is_not_silently_registered() {
 fn mer_pp_tc_008_provider_does_not_carry_catalog_across_projects() {
     use robot_project_panel::RobotProjectPanelProvider;
     use runtime_project::RuntimeProjectAdapter;
-    use workflow_ide_framework::{project::ProjectContext, project_panel_api::ApplicationProjectPanelProvider};
-    let first = ProjectContext::new(std::env::temp_dir().join(format!("meridian-pp-first-{}", uuid::Uuid::new_v4())));
-    let second = ProjectContext::new(std::env::temp_dir().join(format!("meridian-pp-second-{}", uuid::Uuid::new_v4())));
+    use workflow_ide_framework::{
+        project::ProjectContext, project_panel_api::ApplicationProjectPanelProvider,
+    };
+    let first = ProjectContext::new(
+        std::env::temp_dir().join(format!("meridian-pp-first-{}", uuid::Uuid::new_v4())),
+    );
+    let second = ProjectContext::new(
+        std::env::temp_dir().join(format!("meridian-pp-second-{}", uuid::Uuid::new_v4())),
+    );
     let mut catalog = RobotCatalog::default();
     catalog.create("first robot").unwrap();
     RuntimeProjectAdapter::save_catalog(&first, &catalog).unwrap();
@@ -130,11 +164,21 @@ fn mer_pp_tc_008_provider_does_not_carry_catalog_across_projects() {
 #[test]
 fn mer_pp_tc_009_provider_returns_not_handled_for_unimplemented_actions() {
     use robot_project_panel::RobotProjectPanelProvider;
-    use workflow_ide_framework::{project::ProjectContext, project_panel_api::{AppPanelAction, AppPanelActionResult, ApplicationProjectPanelProvider}};
+    use workflow_ide_framework::{
+        project::ProjectContext,
+        project_panel_api::{
+            AppPanelAction, AppPanelActionResult, ApplicationProjectPanelProvider,
+        },
+    };
     let mut provider = RobotProjectPanelProvider;
     let context = ProjectContext::new("example");
     assert_eq!(
-        provider.handle_project_panel_action(&context, AppPanelAction::Activated { node_id: "meridian.robots".into() }),
+        provider.handle_project_panel_action(
+            &context,
+            AppPanelAction::Activated {
+                node_id: "meridian.robots".into()
+            }
+        ),
         AppPanelActionResult::NotHandled
     );
 }

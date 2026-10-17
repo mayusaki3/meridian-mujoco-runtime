@@ -48,3 +48,37 @@ pub fn catalog_nodes(catalog: &RobotCatalog) -> Vec<AppPanelNode> {
         children: robots,
     }]
 }
+
+use workflow_ide_framework::{
+    project::ProjectContext,
+    project_panel_api::{AppPanelAction, AppPanelActionResult, ApplicationProjectPanelProvider},
+};
+
+/// Loads a fresh catalog for each requested project snapshot; no cross-project cache.
+#[derive(Default)]
+pub struct RobotProjectPanelProvider;
+
+impl ApplicationProjectPanelProvider for RobotProjectPanelProvider {
+    fn project_panel_roots(&self, project: &ProjectContext) -> Vec<AppPanelNode> {
+        match crate::runtime_project::RuntimeProjectAdapter::load_catalog(project) {
+            Ok(catalog) => catalog_nodes(&catalog),
+            Err(error) => {
+                workflow_ide_framework::tracing::error!(
+                    target: "meridian::project_panel",
+                    project = %project.root().display(),
+                    error = %error,
+                    "Robot Catalog could not be loaded for Project Panel"
+                );
+                Vec::new()
+            }
+        }
+    }
+
+    fn handle_project_panel_action(
+        &mut self,
+        _project: &ProjectContext,
+        _action: AppPanelAction,
+    ) -> AppPanelActionResult {
+        AppPanelActionResult::NotHandled
+    }
+}

@@ -4,6 +4,12 @@
 mod robot_catalog;
 #[path = "../src/robot_project_panel.rs"]
 mod robot_project_panel;
+#[path = "../src/runtime_project.rs"]
+mod runtime_project;
+#[path = "../src/urdf_io.rs"]
+mod urdf_io;
+#[path = "../src/mjcf_project.rs"]
+mod mjcf_project;
 
 use robot_catalog::{RobotCatalog, RobotRepresentation};
 use robot_project_panel::catalog_nodes;
@@ -103,4 +109,32 @@ fn mer_pp_tc_006_unknown_registry_reference_is_not_silently_registered() {
     let result = build_application_project_tree(&catalog_nodes(&catalog), &registry);
     assert!(matches!(result, Err(workflow_ide_framework::project_panel_api::AppPanelTreeError::UnknownRegisteredResource(ref id)) if id == "missing-id"));
     assert!(registry.entries().is_empty());
+}
+
+#[test]
+fn mer_pp_tc_008_provider_does_not_carry_catalog_across_projects() {
+    use robot_project_panel::RobotProjectPanelProvider;
+    use runtime_project::RuntimeProjectAdapter;
+    use workflow_ide_framework::{project::ProjectContext, project_panel_api::ApplicationProjectPanelProvider};
+    let first = ProjectContext::new(std::env::temp_dir().join(format!("meridian-pp-first-{}", uuid::Uuid::new_v4())));
+    let second = ProjectContext::new(std::env::temp_dir().join(format!("meridian-pp-second-{}", uuid::Uuid::new_v4())));
+    let mut catalog = RobotCatalog::default();
+    catalog.create("first robot").unwrap();
+    RuntimeProjectAdapter::save_catalog(&first, &catalog).unwrap();
+    let provider = RobotProjectPanelProvider;
+    assert_eq!(robot_nodes(&provider.project_panel_roots(&first)).len(), 1);
+    assert!(robot_nodes(&provider.project_panel_roots(&second)).is_empty());
+    std::fs::remove_dir_all(first.root()).unwrap();
+}
+
+#[test]
+fn mer_pp_tc_009_provider_returns_not_handled_for_unimplemented_actions() {
+    use robot_project_panel::RobotProjectPanelProvider;
+    use workflow_ide_framework::{project::ProjectContext, project_panel_api::{AppPanelAction, AppPanelActionResult, ApplicationProjectPanelProvider}};
+    let mut provider = RobotProjectPanelProvider;
+    let context = ProjectContext::new("example");
+    assert_eq!(
+        provider.handle_project_panel_action(&context, AppPanelAction::Activated { node_id: "meridian.robots".into() }),
+        AppPanelActionResult::NotHandled
+    );
 }

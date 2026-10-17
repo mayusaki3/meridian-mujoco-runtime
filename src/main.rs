@@ -1,7 +1,6 @@
 mod localized_errors;
 mod mjcf_project;
 mod robot_catalog;
-mod robot_project_panel;
 mod runtime_project;
 #[cfg(test)]
 mod urdf_fixture_tests;
@@ -17,6 +16,7 @@ use workflow_ide_framework::{
     logging,
     project::ProjectContext,
     project_event::ProjectEventKind,
+    project_panel::{ProjectPanelModel, ProjectPanelNode},
     resource_registry::ResourceRegistry,
 };
 
@@ -82,6 +82,12 @@ mod menu_access_tests {
 }
 
 fn main() {
+    let project_tree = ProjectPanelModel {
+        roots: vec![ProjectPanelNode::logical("project", "Meridian")],
+        framework_resources: vec![],
+        application_resources: vec![],
+    };
+    let project_tree = project_tree.tree(&ResourceRegistry::default());
     let current_project = Arc::new(Mutex::new(None::<PathBuf>));
     let import_project = Arc::clone(&current_project);
     let export_project = Arc::clone(&current_project);
@@ -98,11 +104,7 @@ fn main() {
     .panel(PanelDefinition::new("project", "meridian.panel.project", PanelKind::StandardUi))
     .panel(PanelDefinition::new("logs", "meridian.panel.logs", PanelKind::StandardUi))
     .layout(LayoutConfig::new(["project"]).split_below("project", 0.70, ["logs"]).selected("project"))
-    .application_project_panel(
-        "project",
-        robot_project_panel::RobotProjectPanelProvider,
-        |_project| ResourceRegistry::default(),
-    )
+    .tree_viewer_panel("project", project_tree)
     .log_viewer_panel("logs")
     .language_settings_panel()
     .on_project_event(move |event| {

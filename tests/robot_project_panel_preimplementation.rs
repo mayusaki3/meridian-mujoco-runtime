@@ -1,5 +1,7 @@
 //! MER-PP preimplementation tests. Requires FW Project Panel API at f0534f6 or later.
 //! This test is intentionally added before src/robot_project_panel.rs implementation.
+#[path = "../src/mjcf_project.rs"]
+mod mjcf_project;
 #[path = "../src/robot_catalog.rs"]
 mod robot_catalog;
 #[path = "../src/robot_project_panel.rs"]
@@ -8,8 +10,6 @@ mod robot_project_panel;
 mod runtime_project;
 #[path = "../src/urdf_io.rs"]
 mod urdf_io;
-#[path = "../src/mjcf_project.rs"]
-mod mjcf_project;
 
 use robot_catalog::{RobotCatalog, RobotRepresentation};
 use robot_project_panel::catalog_nodes;

@@ -1,8 +1,8 @@
 //! Pre-integration tests for project-scoped Robot Catalog staging.
-#[path = "../src/robot_catalog.rs"]
-mod robot_catalog;
 #[path = "../src/catalog_stage.rs"]
 mod catalog_stage;
+#[path = "../src/robot_catalog.rs"]
+mod robot_catalog;
 
 use catalog_stage::CatalogStage;
 use robot_catalog::RobotCatalog;

@@ -144,6 +144,59 @@ impl ApplicationProjectAdapter for RuntimeProjectAdapter {
     }
 }
 
+/// GUI adapter sharing a staged Catalog with registration and Project Panel.
+pub struct StagedRuntimeProjectAdapter {
+    pub stage: crate::catalog_stage::SharedCatalogStage,
+}
+
+impl ApplicationProjectAdapter for StagedRuntimeProjectAdapter {
+    type Error = io::Error;
+
+    fn initialize_project(&mut self, context: &ProjectContext) -> Result<(), Self::Error> {
+        RuntimeProjectAdapter.initialize_project(context)
+    }
+
+    fn inspect_project_data(
+        &mut self,
+        context: &ProjectContext,
+        version: Option<&str>,
+    ) -> Result<ProjectDataCompatibility, Self::Error> {
+        RuntimeProjectAdapter.inspect_project_data(context, version)
+    }
+
+    fn check_project_consistency(
+        &mut self,
+        context: &ProjectContext,
+    ) -> Result<ProjectDataConsistency, Self::Error> {
+        RuntimeProjectAdapter.check_project_consistency(context)
+    }
+
+    fn save_project_data(
+        &mut self,
+        context: &ProjectContext,
+        save_id: &str,
+    ) -> Result<ApplicationSaveResult, Self::Error> {
+        let result = RuntimeProjectAdapter.save_project_data(context, save_id)?;
+        let stage = self.stage.lock().map_err(|_| io::Error::other("Catalog stage lock poisoned"))?;
+        stage.persist_for_save(context.root(), |catalog| RuntimeProjectAdapter::save_catalog(context, catalog))?;
+        Ok(result)
+    }
+
+    fn save_project_data_as(
+        &mut self,
+        source: Option<&ProjectContext>,
+        destination: &ProjectContext,
+        save_id: &str,
+    ) -> Result<ApplicationSaveResult, Self::Error> {
+        let result = RuntimeProjectAdapter.save_project_data_as(source, destination, save_id)?;
+        if let Some(source) = source {
+            let stage = self.stage.lock().map_err(|_| io::Error::other("Catalog stage lock poisoned"))?;
+            stage.persist_for_save(source.root(), |catalog| RuntimeProjectAdapter::save_catalog(destination, catalog))?;
+        }
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

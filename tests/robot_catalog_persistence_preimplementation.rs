@@ -140,3 +140,46 @@ fn mer_res_tc_015_corrupt_catalog_is_reported_as_inconsistent() {
     ));
     fs::remove_dir_all(project.root()).unwrap();
 }
+
+#[test]
+fn mer_reg_persist_tc_017_staged_catalog_is_written_only_by_save_hook() {
+    let project = context();
+    let stage = catalog_stage::SharedCatalogStage::default();
+    let mut catalog = RobotCatalog::default();
+    let id = catalog.create("Staged").unwrap();
+    {
+        let mut guard = stage.lock().unwrap();
+        guard.activate(project.root(), RobotCatalog::default());
+        guard.replace(project.root(), catalog).unwrap();
+    }
+    let file = project.application_directory().join("robot-catalog.json");
+    assert!(!file.exists());
+    let mut adapter = runtime_project::StagedRuntimeProjectAdapter { stage: stage.clone() };
+    adapter.save_project_data(&project, "save").unwrap();
+    assert_eq!(RuntimeProjectAdapter::load_catalog(&project).unwrap().robots()[0].robot_id, id);
+    assert!(stage.lock().unwrap().is_dirty(project.root()));
+    stage.lock().unwrap().mark_saved(project.root());
+    assert!(!stage.lock().unwrap().is_dirty(project.root()));
+    fs::remove_dir_all(project.root()).unwrap();
+}
+
+#[test]
+fn mer_reg_persist_tc_018_save_as_uses_staged_catalog_and_preserves_robot_id() {
+    let source = context();
+    let destination = context();
+    let stage = catalog_stage::SharedCatalogStage::default();
+    let mut catalog = RobotCatalog::default();
+    let id = catalog.create("Staged").unwrap();
+    {
+        let mut guard = stage.lock().unwrap();
+        guard.activate(source.root(), RobotCatalog::default());
+        guard.replace(source.root(), catalog).unwrap();
+    }
+    let mut adapter = runtime_project::StagedRuntimeProjectAdapter { stage: stage.clone() };
+    adapter.save_project_data_as(Some(&source), &destination, "save-as").unwrap();
+    assert_eq!(RuntimeProjectAdapter::load_catalog(&destination).unwrap().robots()[0].robot_id, id);
+    assert!(!source.application_directory().join("robot-catalog.json").exists());
+    assert!(stage.lock().unwrap().is_dirty(source.root()));
+    fs::remove_dir_all(source.root()).unwrap();
+    fs::remove_dir_all(destination.root()).unwrap();
+}

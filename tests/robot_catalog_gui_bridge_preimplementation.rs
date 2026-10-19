@@ -1,4 +1,8 @@
 //! MER-REG GUI bridge regression tests (real Framework RegistryAccess).
+#[path = "../src/catalog_registration.rs"]
+mod catalog_registration;
+#[path = "../src/mjcf_project.rs"]
+mod mjcf_project;
 #[path = "../src/robot_catalog.rs"]
 mod robot_catalog;
 #[path = "../src/robot_registry_integration.rs"]
@@ -7,15 +11,10 @@ mod robot_registry_integration;
 mod runtime_project;
 #[path = "../src/urdf_io.rs"]
 mod urdf_io;
-#[path = "../src/mjcf_project.rs"]
-mod mjcf_project;
-#[path = "../src/catalog_registration.rs"]
-mod catalog_registration;
 
 use std::sync::{Arc, Mutex};
 use workflow_ide_framework::{
-    project_controller::ProjectController,
-    project_lifecycle::ProjectSession,
+    project_controller::ProjectController, project_lifecycle::ProjectSession,
 };
 
 fn controller() -> ProjectController {
@@ -36,7 +35,11 @@ fn mer_reg_gui_tc_001_request_is_not_consumed_without_active_root() {
     });
     let active = Arc::new(Mutex::new(None));
     let mut controller = controller();
-    catalog_registration::process_pending(&pending, &active, &mut controller.registry_access().unwrap());
+    catalog_registration::process_pending(
+        &pending,
+        &active,
+        &mut controller.registry_access().unwrap(),
+    );
     assert!(pending.lock().unwrap().request.is_some());
     assert!(controller.resource_registry.entries().is_empty());
 }
@@ -51,9 +54,15 @@ fn mer_reg_gui_tc_002_other_project_request_is_not_processed() {
         path: "application/robot-source.urdf",
         format: "URDF",
     });
-    let active = Arc::new(Mutex::new(Some(std::env::temp_dir().join("meridian-project-b"))));
+    let active = Arc::new(Mutex::new(Some(
+        std::env::temp_dir().join("meridian-project-b"),
+    )));
     let mut controller = controller();
-    catalog_registration::process_pending(&pending, &active, &mut controller.registry_access().unwrap());
+    catalog_registration::process_pending(
+        &pending,
+        &active,
+        &mut controller.registry_access().unwrap(),
+    );
     assert!(pending.lock().unwrap().request.is_some());
     assert!(controller.resource_registry.entries().is_empty());
 }

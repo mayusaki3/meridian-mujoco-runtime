@@ -13,7 +13,6 @@ use workflow_ide_framework::{
     project_resource::{ResourceReference, ResourceScope},
 };
 
-
 #[derive(Clone, Debug)]
 pub struct Request {
     pub root: PathBuf,

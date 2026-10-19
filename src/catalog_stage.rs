@@ -83,5 +83,4 @@ impl CatalogStage {
         write(catalog)?;
         Ok(true)
     }
-
 }

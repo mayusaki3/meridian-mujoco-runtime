@@ -22,40 +22,84 @@ fn controller() -> ProjectController {
 fn mer_reg_tc_001_registry_id_is_framework_generated_and_catalog_references_it() {
     let mut controller = controller();
     let mut catalog = RobotCatalog::default();
-    let reference = ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
+    let reference =
+        ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
     let robot_id = {
         let mut access = controller.registry_access().unwrap();
-        register_robot_representation(&mut access, &mut catalog, "Robot A", reference.clone(), "URDF", "source").unwrap()
+        register_robot_representation(
+            &mut access,
+            &mut catalog,
+            "Robot A",
+            reference.clone(),
+            "URDF",
+            "source",
+        )
+        .unwrap()
     };
-    let robot = catalog.robots().iter().find(|robot| robot.robot_id == robot_id).unwrap();
+    let robot = catalog
+        .robots()
+        .iter()
+        .find(|robot| robot.robot_id == robot_id)
+        .unwrap();
     assert_eq!(robot.representations.len(), 1);
     assert_eq!(controller.resource_registry.entries().len(), 1);
-    assert_eq!(robot.representations[0].registry_resource_id, controller.resource_registry.entries()[0].resource_id);
-    assert_eq!(controller.resource_registry.find_by_reference(&reference).unwrap().resource_id, robot.representations[0].registry_resource_id);
+    assert_eq!(
+        robot.representations[0].registry_resource_id,
+        controller.resource_registry.entries()[0].resource_id
+    );
+    assert_eq!(
+        controller
+            .resource_registry
+            .find_by_reference(&reference)
+            .unwrap()
+            .resource_id,
+        robot.representations[0].registry_resource_id
+    );
 }
 
 #[test]
 fn mer_reg_tc_002_repeated_reference_reuses_resource_id_but_not_robot_id() {
     let mut controller = controller();
     let mut catalog = RobotCatalog::default();
-    let reference = ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
+    let reference =
+        ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
     let (first, second) = {
         let mut access = controller.registry_access().unwrap();
-        let first = register_robot_representation(&mut access, &mut catalog, "Robot A", reference.clone(), "URDF", "source").unwrap();
-        let second = register_robot_representation(&mut access, &mut catalog, "Robot B", reference, "URDF", "source").unwrap();
+        let first = register_robot_representation(
+            &mut access,
+            &mut catalog,
+            "Robot A",
+            reference.clone(),
+            "URDF",
+            "source",
+        )
+        .unwrap();
+        let second = register_robot_representation(
+            &mut access,
+            &mut catalog,
+            "Robot B",
+            reference,
+            "URDF",
+            "source",
+        )
+        .unwrap();
         (first, second)
     };
     assert_ne!(first, second);
     assert_eq!(controller.resource_registry.entries().len(), 1);
     assert_eq!(catalog.robots().len(), 2);
-    assert_eq!(catalog.robots()[0].representations[0].registry_resource_id, catalog.robots()[1].representations[0].registry_resource_id);
+    assert_eq!(
+        catalog.robots()[0].representations[0].registry_resource_id,
+        catalog.robots()[1].representations[0].registry_resource_id
+    );
 }
 
 #[test]
 fn mer_reg_tc_003_invalid_robot_name_does_not_register_resource() {
     let mut controller = controller();
     let mut catalog = RobotCatalog::default();
-    let reference = ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
+    let reference =
+        ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
     let result = {
         let mut access = controller.registry_access().unwrap();
         register_robot_representation(&mut access, &mut catalog, "", reference, "URDF", "source")

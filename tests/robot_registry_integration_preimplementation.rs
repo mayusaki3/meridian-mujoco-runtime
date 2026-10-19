@@ -115,7 +115,8 @@ fn mer_reg_tc_004_invalid_representation_fields_leave_registry_and_catalog_uncha
         let mut controller = controller();
         let mut catalog = RobotCatalog::default();
         let reference =
-            ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
+            ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf")
+                .unwrap();
         let result = {
             let mut access = controller.registry_access().unwrap();
             register_robot_representation(

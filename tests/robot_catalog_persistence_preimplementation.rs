@@ -1,5 +1,7 @@
 //! MER-RESOURCE-001 persistence contract tests.
 //! The adapter methods are intentionally introduced after these tests.
+#[path = "../src/catalog_stage.rs"]
+mod catalog_stage;
 #[path = "../src/mjcf_project.rs"]
 mod mjcf_project;
 #[path = "../src/robot_catalog.rs"]

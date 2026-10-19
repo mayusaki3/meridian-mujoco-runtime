@@ -108,3 +108,57 @@ fn mer_reg_tc_003_invalid_robot_name_does_not_register_resource() {
     assert!(catalog.robots().is_empty());
     assert!(controller.resource_registry.entries().is_empty());
 }
+
+#[test]
+fn mer_reg_tc_004_invalid_representation_fields_leave_registry_and_catalog_unchanged() {
+    for (format, role) in [("", "source"), ("URDF", ""), ("  ", "source")] {
+        let mut controller = controller();
+        let mut catalog = RobotCatalog::default();
+        let reference =
+            ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
+        let result = {
+            let mut access = controller.registry_access().unwrap();
+            register_robot_representation(
+                &mut access,
+                &mut catalog,
+                "Robot A",
+                reference,
+                format,
+                role,
+            )
+        };
+        assert!(result.is_err());
+        assert!(catalog.robots().is_empty());
+        assert!(controller.resource_registry.entries().is_empty());
+    }
+}
+
+#[test]
+fn mer_reg_tc_005_registration_requires_active_framework_project() {
+    let mut controller = ProjectController::new("meridian-mujoco-runtime", "Meridian");
+    assert!(controller.registry_access().is_err());
+    assert!(controller.resource_registry.entries().is_empty());
+}
+
+#[test]
+fn mer_reg_tc_006_registration_does_not_implicitly_persist_catalog() {
+    let mut controller = controller();
+    let mut catalog = RobotCatalog::default();
+    let reference =
+        ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
+    {
+        let mut access = controller.registry_access().unwrap();
+        register_robot_representation(
+            &mut access,
+            &mut catalog,
+            "Robot A",
+            reference,
+            "URDF",
+            "source",
+        )
+        .unwrap();
+    }
+    // RegistryAccess changes Framework state; the application still owns catalog persistence.
+    assert_eq!(catalog.robots().len(), 1);
+    assert!(controller.session.as_ref().unwrap().dirty.framework);
+}

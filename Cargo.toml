@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-workflow-ide-framework = { git = "https://github.com/mayusaki3/workflow-ide-framework", rev = "890db80" }
+workflow-ide-framework = { git = "https://github.com/mayusaki3/workflow-ide-framework", rev = "555ffbb" }
 robot-model-import = { path = "crates/robot-model-import" }
 rfd = "0.15"
 

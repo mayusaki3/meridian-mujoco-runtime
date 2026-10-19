@@ -1,4 +1,5 @@
 mod catalog_registration;
+mod catalog_stage;
 mod localized_errors;
 mod mjcf_project;
 mod robot_catalog;
@@ -84,6 +85,10 @@ mod menu_access_tests {
 
 fn main() {
     let current_project = Arc::new(Mutex::new(None::<PathBuf>));
+    let catalog_stage = catalog_stage::SharedCatalogStage::default();
+    let adapter_stage = Arc::clone(&catalog_stage);
+    let callback_stage = Arc::clone(&catalog_stage);
+    let event_stage = Arc::clone(&catalog_stage);
     let pending_registration = catalog_registration::SharedPending::default();
     let callback_pending = Arc::clone(&pending_registration);
     let callback_project = Arc::clone(&current_project);
@@ -101,7 +106,7 @@ fn main() {
         "Meridian MuJoCo Runtime",
     )
     .localization_resources("resources/meridian-locales")
-    .project_adapter(runtime_project::RuntimeProjectAdapter)
+    .project_adapter(runtime_project::StagedRuntimeProjectAdapter { stage: adapter_stage })
     .panel(PanelDefinition::new("project", "meridian.panel.project", PanelKind::StandardUi))
     .panel(PanelDefinition::new("logs", "meridian.panel.logs", PanelKind::StandardUi))
     .layout(LayoutConfig::new(["project"]).split_below("project", 0.70, ["logs"]).selected("project"))
@@ -109,12 +114,22 @@ fn main() {
     .log_viewer_panel("logs")
     .language_settings_panel()
     .on_registry_access(move |registry| {
-        catalog_registration::process_pending(&callback_pending, &callback_project, registry);
+        catalog_registration::process_pending(&callback_pending, &callback_project, registry, &callback_stage);
     })
     .on_project_event(move |event| {
         if matches!(event.kind, ProjectEventKind::Created | ProjectEventKind::Opened | ProjectEventKind::SavedAs | ProjectEventKind::Closed) {
             if let Ok(mut pending) = event_pending.lock() {
                 pending.request = None;
+            }
+        }
+        if let Ok(mut stage) = event_stage.lock() {
+            match event.kind {
+                ProjectEventKind::Created | ProjectEventKind::Opened | ProjectEventKind::Closed => stage.discard(),
+                ProjectEventKind::Saved => {
+                    if let Some(root) = &event.root { stage.mark_saved(root); }
+                }
+                ProjectEventKind::SavedAs => stage.discard(),
+                ProjectEventKind::CloseRequested => {}
             }
         }
         if let Ok(mut active) = event_project.lock() {

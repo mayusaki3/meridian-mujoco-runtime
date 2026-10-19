@@ -1,6 +1,8 @@
 //! MER-REG GUI bridge regression tests (real Framework RegistryAccess).
 #[path = "../src/catalog_registration.rs"]
 mod catalog_registration;
+#[path = "../src/catalog_stage.rs"]
+mod catalog_stage;
 #[path = "../src/mjcf_project.rs"]
 mod mjcf_project;
 #[path = "../src/robot_catalog.rs"]
@@ -39,6 +41,7 @@ fn mer_reg_gui_tc_001_request_is_not_consumed_without_active_root() {
         &pending,
         &active,
         &mut controller.registry_access().unwrap(),
+        &catalog_stage::SharedCatalogStage::default(),
     );
     assert!(pending.lock().unwrap().request.is_some());
     assert!(controller.resource_registry.entries().is_empty());

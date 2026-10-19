@@ -74,12 +74,19 @@ fn mer_reg_persist_tc_013_save_callback_writes_snapshot_but_does_not_clear_dirty
     let id = candidate.create("Robot A").unwrap();
     stage.replace(root, candidate).unwrap();
     let mut persisted = None;
-    assert!(stage.persist_for_save(root, |catalog| {
-        persisted = Some(catalog.clone());
-        Ok(())
-    }).unwrap());
+    assert!(
+        stage
+            .persist_for_save(root, |catalog| {
+                persisted = Some(catalog.clone());
+                Ok(())
+            })
+            .unwrap()
+    );
     assert_eq!(persisted.unwrap().robots()[0].robot_id, id);
-    assert!(stage.is_dirty(root), "Framework save completion must clear dirty, not app write");
+    assert!(
+        stage.is_dirty(root),
+        "Framework save completion must clear dirty, not app write"
+    );
 }
 
 #[test]
@@ -105,10 +112,14 @@ fn mer_reg_persist_tc_015_save_as_preserves_ids_without_mutating_source_stage() 
     let id = candidate.create("Robot A").unwrap();
     stage.replace(source, candidate).unwrap();
     let mut destination = None;
-    assert!(stage.persist_for_save(source, |catalog| {
-        destination = Some(catalog.clone());
-        Ok(())
-    }).unwrap());
+    assert!(
+        stage
+            .persist_for_save(source, |catalog| {
+                destination = Some(catalog.clone());
+                Ok(())
+            })
+            .unwrap()
+    );
     assert_eq!(destination.unwrap().robots()[0].robot_id, id);
     assert_eq!(stage.snapshot(source).unwrap().robots()[0].robot_id, id);
 }
@@ -117,9 +128,13 @@ fn mer_reg_persist_tc_015_save_as_preserves_ids_without_mutating_source_stage() 
 fn mer_reg_persist_tc_016_no_active_stage_does_not_invoke_save_callback() {
     let stage = CatalogStage::default();
     let mut called = false;
-    assert!(!stage.persist_for_save(Path::new("project-a"), |_| {
-        called = true;
-        Ok(())
-    }).unwrap());
+    assert!(
+        !stage
+            .persist_for_save(Path::new("project-a"), |_| {
+                called = true;
+                Ok(())
+            })
+            .unwrap()
+    );
     assert!(!called);
 }

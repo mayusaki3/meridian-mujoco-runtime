@@ -70,4 +70,18 @@ impl CatalogStage {
             state.dirty = false;
         }
     }
+    /// Persist a snapshot during Framework's application-save phase.
+    /// The caller must only mark it saved after the whole Framework save succeeds.
+    pub fn persist_for_save(
+        &self,
+        source_root: &Path,
+        destination: &workflow_ide_framework::project::ProjectContext,
+    ) -> io::Result<bool> {
+        let Some(catalog) = self.snapshot(source_root) else {
+            return Ok(false);
+        };
+        crate::runtime_project::RuntimeProjectAdapter::save_catalog(destination, catalog)?;
+        Ok(true)
+    }
+
 }

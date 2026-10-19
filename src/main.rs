@@ -1,7 +1,9 @@
+mod catalog_registration;
 mod localized_errors;
 mod mjcf_project;
 mod robot_catalog;
 mod robot_project_panel;
+mod robot_registry_integration;
 mod runtime_project;
 #[cfg(test)]
 mod urdf_fixture_tests;
@@ -82,6 +84,12 @@ mod menu_access_tests {
 
 fn main() {
     let current_project = Arc::new(Mutex::new(None::<PathBuf>));
+    let pending_registration = catalog_registration::SharedPending::default();
+    let callback_pending = Arc::clone(&pending_registration);
+    let callback_project = Arc::clone(&current_project);
+    let command_pending = Arc::clone(&pending_registration);
+    let command_project = Arc::clone(&current_project);
+    let event_pending = Arc::clone(&pending_registration);
     let import_project = Arc::clone(&current_project);
     let export_project = Arc::clone(&current_project);
     let event_project = Arc::clone(&current_project);
@@ -100,7 +108,15 @@ fn main() {
     .application_project_panel("project", robot_project_panel::RobotProjectPanelProvider)
     .log_viewer_panel("logs")
     .language_settings_panel()
+    .on_registry_access(move |registry| {
+        catalog_registration::process_pending(&callback_pending, &callback_project, registry);
+    })
     .on_project_event(move |event| {
+        if matches!(event.kind, ProjectEventKind::Created | ProjectEventKind::Opened | ProjectEventKind::SavedAs | ProjectEventKind::Closed) {
+            if let Ok(mut pending) = event_pending.lock() {
+                pending.request = None;
+            }
+        }
         if let Ok(mut active) = event_project.lock() {
             match event.kind {
                 ProjectEventKind::Created | ProjectEventKind::Opened | ProjectEventKind::Saved | ProjectEventKind::SavedAs => {
@@ -133,6 +149,27 @@ fn main() {
         }
     }).label_key("meridian.menu.urdf.import").requires_stored_project())
     .menu_item(data_menu_import_item())
+    .command(CommandDefinition::new("runtime.catalog.register_urdf", "既存URDFをRobot Catalogへ登録", move || {
+        let root = command_project.lock().ok().and_then(|active| active.clone());
+        let Some(root) = root else { return; };
+        let context = ProjectContext::new(root.clone());
+        match runtime_project::RuntimeProjectAdapter::load_source(&context) {
+            Ok(Some(_imported)) => {
+                let name = "Imported URDF Robot".to_owned();
+                if let Ok(mut pending) = command_pending.lock() {
+                    pending.request = Some(catalog_registration::Request {
+                        root,
+                        name,
+                        path: "application/robot-source.urdf",
+                        format: "URDF",
+                    });
+                }
+            }
+            Ok(None) => workflow_ide_framework::tracing::warn!(target: "meridian::catalog", "No imported URDF source to register"),
+            Err(error) => workflow_ide_framework::tracing::error!(target: "meridian::catalog", error=%error, "Cannot load imported URDF source"),
+        }
+    }).requires_stored_project())
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.catalog.register_urdf"))
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
         let capture = logging::dialog_on_key("meridian.urdf.export.result.title");
         let _operation = capture.span().enter();

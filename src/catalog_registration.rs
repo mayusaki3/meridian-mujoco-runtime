@@ -37,7 +37,7 @@ pub fn process_pending(pending: &SharedPending, active_root: &Arc<Mutex<Option<P
     let result = (|| {
         let mut catalog = RuntimeProjectAdapter::load_catalog(&context)?;
         let reference = ResourceReference::new(ResourceScope::Project, request.path)
-            .map_err(std::io::Error::other)?;
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{error:?}")))?;
         let id = register_robot_representation(registry, &mut catalog, &request.name, reference, request.format, "source")?;
         RuntimeProjectAdapter::save_catalog(&context, &catalog)?;
         Ok::<String, std::io::Error>(id)

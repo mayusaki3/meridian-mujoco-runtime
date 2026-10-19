@@ -1,5 +1,6 @@
 //! Explicit, project-scoped registration requests from UI commands to Framework.
 use crate::{
+    catalog_stage::SharedCatalogStage,
     robot_registry_integration::register_robot_representation,
     runtime_project::RuntimeProjectAdapter,
 };
@@ -32,6 +33,7 @@ pub fn process_pending(
     pending: &SharedPending,
     active_root: &Arc<Mutex<Option<PathBuf>>>,
     registry: &mut RegistryAccess<'_>,
+    stage: &SharedCatalogStage,
 ) {
     let root = active_root.lock().ok().and_then(|guard| guard.clone());
     let Some(root) = root else {
@@ -51,7 +53,11 @@ pub fn process_pending(
     };
     let context = ProjectContext::new(root.clone());
     let result = (|| {
-        let mut catalog = RuntimeProjectAdapter::load_catalog(&context)?;
+        let mut stage_guard = stage.lock().map_err(|_| std::io::Error::other("Catalog stage lock poisoned"))?;
+        if stage_guard.snapshot(&root).is_none() {
+            stage_guard.activate(&root, RuntimeProjectAdapter::load_catalog(&context)?);
+        }
+        let mut catalog = stage_guard.snapshot(&root).expect("stage activated").clone();
         let reference =
             ResourceReference::new(ResourceScope::Project, request.path).map_err(|error| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{error:?}"))
@@ -64,7 +70,7 @@ pub fn process_pending(
             request.format,
             "source",
         )?;
-        RuntimeProjectAdapter::save_catalog(&context, &catalog)?;
+        stage_guard.replace(&root, catalog)?;
         Ok::<String, std::io::Error>(id)
     })();
     match result {
@@ -72,12 +78,7 @@ pub fn process_pending(
             workflow_ide_framework::tracing::info!(target: "meridian::catalog", robot_id=%id, "Robot Catalog registration completed")
         }
         Err(error) => {
-            workflow_ide_framework::tracing::error!(target: "meridian::catalog", error=%error, "Robot Catalog registration failed; request retained for retry");
-            if let Ok(mut state) = pending.lock() {
-                if state.request.is_none() {
-                    state.request = Some(request);
-                }
-            }
+            workflow_ide_framework::tracing::error!(target: "meridian::catalog", error=%error, "Robot Catalog registration failed; request consumed (explicit retry required)");
         }
     }
 }

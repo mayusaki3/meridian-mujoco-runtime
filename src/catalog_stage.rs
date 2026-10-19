@@ -1,7 +1,11 @@
 //! In-memory, project-scoped Robot Catalog staging.
 //! The project adapter and Registry command bridge will share this store.
 use crate::robot_catalog::RobotCatalog;
-use std::{io, path::{Path, PathBuf}, sync::{Arc, Mutex}};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 #[derive(Default)]
 pub struct CatalogStage {
@@ -31,16 +35,29 @@ impl CatalogStage {
     }
 
     pub fn snapshot(&self, root: &Path) -> Option<&RobotCatalog> {
-        self.current.as_ref().filter(|state| state.root == root).map(|state| &state.catalog)
+        self.current
+            .as_ref()
+            .filter(|state| state.root == root)
+            .map(|state| &state.catalog)
     }
 
     pub fn is_dirty(&self, root: &Path) -> bool {
-        self.current.as_ref().is_some_and(|state| state.root == root && state.dirty)
+        self.current
+            .as_ref()
+            .is_some_and(|state| state.root == root && state.dirty)
     }
 
     pub fn replace(&mut self, root: &Path, catalog: RobotCatalog) -> io::Result<()> {
-        let state = self.current.as_mut().filter(|state| state.root == root)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Robot Catalog stage is not active for this project"))?;
+        let state = self
+            .current
+            .as_mut()
+            .filter(|state| state.root == root)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Robot Catalog stage is not active for this project",
+                )
+            })?;
         // Validate before replacing the staged data.
         catalog.to_json()?;
         state.catalog = catalog;

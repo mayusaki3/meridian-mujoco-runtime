@@ -86,3 +86,60 @@ pub fn process_pending(
         }
     }
 }
+
+/// One-shot post-open check, executed only when Framework exposes RegistryAccess.
+pub fn diagnose_opened_project(
+    pending_root: &Arc<Mutex<Option<PathBuf>>>,
+    active_root: &Arc<Mutex<Option<PathBuf>>>,
+    registry: &RegistryAccess<'_>,
+) {
+    let Some(active) = active_root.lock().ok().and_then(|root| root.clone()) else {
+        return;
+    };
+    let should_check = {
+        let Ok(mut pending) = pending_root.lock() else {
+            return;
+        };
+        if pending.as_ref() != Some(&active) {
+            false
+        } else {
+            *pending = None;
+            true
+        }
+    };
+    if !should_check {
+        return;
+    }
+    let context = ProjectContext::new(active.clone());
+    match RuntimeProjectAdapter::load_catalog(&context) {
+        Ok(catalog) => {
+            let unresolved =
+                crate::robot_registry_integration::unresolved_registry_references(&catalog, registry);
+            for item in &unresolved {
+                workflow_ide_framework::tracing::warn!(
+                    target: "meridian::registry",
+                    project = %active.display(),
+                    robot_id = %item.robot_id,
+                    registry_resource_id = %item.registry_resource_id,
+                    format = %item.format,
+                    role = %item.role,
+                    "Robot Catalog contains unresolved Framework Registry reference"
+                );
+            }
+            workflow_ide_framework::tracing::info!(
+                target: "meridian::registry",
+                project = %active.display(),
+                unresolved = unresolved.len(),
+                "Robot Catalog Registry reference check completed"
+            );
+        }
+        Err(error) => {
+            workflow_ide_framework::tracing::error!(
+                target: "meridian::registry",
+                project = %active.display(),
+                error = %error,
+                "Robot Catalog Registry reference check failed"
+            );
+        }
+    }
+}

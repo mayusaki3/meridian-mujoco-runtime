@@ -184,3 +184,52 @@ fn mer_pp_tc_009_provider_returns_not_handled_for_unimplemented_actions() {
         AppPanelActionResult::NotHandled
     );
 }
+
+#[test]
+fn mer_pp_tc_010_staged_provider_displays_unsaved_robot_without_disk_write() {
+    use robot_project_panel::StagedRobotProjectPanelProvider;
+    use workflow_ide_framework::{
+        project::ProjectContext, project_panel_api::ApplicationProjectPanelProvider,
+    };
+    let project = ProjectContext::new(
+        std::env::temp_dir().join(format!("meridian-pp-stage-{}", uuid::Uuid::new_v4())),
+    );
+    let stage = catalog_stage::SharedCatalogStage::default();
+    let mut catalog = RobotCatalog::default();
+    let id = catalog.create("unsaved robot").unwrap();
+    {
+        let mut guard = stage.lock().unwrap();
+        guard.activate(project.root(), RobotCatalog::default());
+        guard.replace(project.root(), catalog).unwrap();
+    }
+    let provider = StagedRobotProjectPanelProvider { stage };
+    let nodes = provider.project_panel_roots(&project);
+    assert_eq!(robot_nodes(&nodes).len(), 1);
+    assert!(matches!(&robot_nodes(&nodes)[0].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &id));
+    assert!(!project.application_directory().join("robot-catalog.json").exists());
+}
+
+#[test]
+fn mer_pp_tc_011_staged_provider_isolated_by_project_and_discard() {
+    use robot_project_panel::StagedRobotProjectPanelProvider;
+    use workflow_ide_framework::{
+        project::ProjectContext, project_panel_api::ApplicationProjectPanelProvider,
+    };
+    let first = ProjectContext::new(
+        std::env::temp_dir().join(format!("meridian-pp-stage-a-{}", uuid::Uuid::new_v4())),
+    );
+    let second = ProjectContext::new(
+        std::env::temp_dir().join(format!("meridian-pp-stage-b-{}", uuid::Uuid::new_v4())),
+    );
+    let stage = catalog_stage::SharedCatalogStage::default();
+    let mut catalog = RobotCatalog::default();
+    catalog.create("first robot").unwrap();
+    stage.lock().unwrap().activate(first.root(), catalog);
+    let provider = StagedRobotProjectPanelProvider {
+        stage: stage.clone(),
+    };
+    assert_eq!(robot_nodes(&provider.project_panel_roots(&first)).len(), 1);
+    assert!(robot_nodes(&provider.project_panel_roots(&second)).is_empty());
+    stage.lock().unwrap().discard();
+    assert!(robot_nodes(&provider.project_panel_roots(&first)).is_empty());
+}

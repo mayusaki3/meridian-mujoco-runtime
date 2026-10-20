@@ -1,7 +1,6 @@
 //! Explicit, project-scoped registration requests from UI commands to Framework.
 use crate::{
-    catalog_stage::SharedCatalogStage,
-    robot_registry_integration::register_robot_representation,
+    catalog_stage::SharedCatalogStage, robot_registry_integration::register_robot_representation,
     runtime_project::RuntimeProjectAdapter,
 };
 use std::{
@@ -53,11 +52,16 @@ pub fn process_pending(
     };
     let context = ProjectContext::new(root.clone());
     let result = (|| {
-        let mut stage_guard = stage.lock().map_err(|_| std::io::Error::other("Catalog stage lock poisoned"))?;
+        let mut stage_guard = stage
+            .lock()
+            .map_err(|_| std::io::Error::other("Catalog stage lock poisoned"))?;
         if stage_guard.snapshot(&root).is_none() {
             stage_guard.activate(&root, RuntimeProjectAdapter::load_catalog(&context)?);
         }
-        let mut catalog = stage_guard.snapshot(&root).expect("stage activated").clone();
+        let mut catalog = stage_guard
+            .snapshot(&root)
+            .expect("stage activated")
+            .clone();
         let reference =
             ResourceReference::new(ResourceScope::Project, request.path).map_err(|error| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{error:?}"))

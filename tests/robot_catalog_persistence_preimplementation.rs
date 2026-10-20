@@ -154,9 +154,17 @@ fn mer_reg_persist_tc_017_staged_catalog_is_written_only_by_save_hook() {
     }
     let file = project.application_directory().join("robot-catalog.json");
     assert!(!file.exists());
-    let mut adapter = runtime_project::StagedRuntimeProjectAdapter { stage: stage.clone() };
+    let mut adapter = runtime_project::StagedRuntimeProjectAdapter {
+        stage: stage.clone(),
+    };
     adapter.save_project_data(&project, "save").unwrap();
-    assert_eq!(RuntimeProjectAdapter::load_catalog(&project).unwrap().robots()[0].robot_id, id);
+    assert_eq!(
+        RuntimeProjectAdapter::load_catalog(&project)
+            .unwrap()
+            .robots()[0]
+            .robot_id,
+        id
+    );
     assert!(stage.lock().unwrap().is_dirty(project.root()));
     stage.lock().unwrap().mark_saved(project.root());
     assert!(!stage.lock().unwrap().is_dirty(project.root()));
@@ -175,11 +183,29 @@ fn mer_reg_persist_tc_018_save_as_uses_staged_catalog_and_preserves_robot_id() {
         guard.activate(source.root(), RobotCatalog::default());
         guard.replace(source.root(), catalog).unwrap();
     }
-    let mut adapter = runtime_project::StagedRuntimeProjectAdapter { stage: stage.clone() };
-    adapter.save_project_data_as(Some(&source), &destination, "save-as").unwrap();
-    assert_eq!(RuntimeProjectAdapter::load_catalog(&destination).unwrap().robots()[0].robot_id, id);
-    assert!(!source.application_directory().join("robot-catalog.json").exists());
+    let mut adapter = runtime_project::StagedRuntimeProjectAdapter {
+        stage: stage.clone(),
+    };
+    adapter
+        .save_project_data_as(Some(&source), &destination, "save-as")
+        .unwrap();
+    assert_eq!(
+        RuntimeProjectAdapter::load_catalog(&destination)
+            .unwrap()
+            .robots()[0]
+            .robot_id,
+        id
+    );
+    assert!(
+        !source
+            .application_directory()
+            .join("robot-catalog.json")
+            .exists()
+    );
     assert!(stage.lock().unwrap().is_dirty(source.root()));
-    fs::remove_dir_all(source.root()).unwrap();
+    // The unsaved source directory need not exist.
+    if source.root().exists() {
+        fs::remove_dir_all(source.root()).unwrap();
+    }
     fs::remove_dir_all(destination.root()).unwrap();
 }

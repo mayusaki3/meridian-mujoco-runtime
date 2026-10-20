@@ -177,8 +177,13 @@ impl ApplicationProjectAdapter for StagedRuntimeProjectAdapter {
         save_id: &str,
     ) -> Result<ApplicationSaveResult, Self::Error> {
         let result = RuntimeProjectAdapter.save_project_data(context, save_id)?;
-        let stage = self.stage.lock().map_err(|_| io::Error::other("Catalog stage lock poisoned"))?;
-        stage.persist_for_save(context.root(), |catalog| RuntimeProjectAdapter::save_catalog(context, catalog))?;
+        let stage = self
+            .stage
+            .lock()
+            .map_err(|_| io::Error::other("Catalog stage lock poisoned"))?;
+        stage.persist_for_save(context.root(), |catalog| {
+            RuntimeProjectAdapter::save_catalog(context, catalog)
+        })?;
         Ok(result)
     }
 
@@ -190,8 +195,13 @@ impl ApplicationProjectAdapter for StagedRuntimeProjectAdapter {
     ) -> Result<ApplicationSaveResult, Self::Error> {
         let result = RuntimeProjectAdapter.save_project_data_as(source, destination, save_id)?;
         if let Some(source) = source {
-            let stage = self.stage.lock().map_err(|_| io::Error::other("Catalog stage lock poisoned"))?;
-            stage.persist_for_save(source.root(), |catalog| RuntimeProjectAdapter::save_catalog(destination, catalog))?;
+            let stage = self
+                .stage
+                .lock()
+                .map_err(|_| io::Error::other("Catalog stage lock poisoned"))?;
+            stage.persist_for_save(source.root(), |catalog| {
+                RuntimeProjectAdapter::save_catalog(destination, catalog)
+            })?;
         }
         Ok(result)
     }

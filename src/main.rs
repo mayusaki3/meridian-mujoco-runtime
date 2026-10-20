@@ -91,6 +91,9 @@ fn main() {
     let callback_stage = Arc::clone(&catalog_stage);
     let event_stage = Arc::clone(&catalog_stage);
     let pending_registration = catalog_registration::SharedPending::default();
+    let pending_diagnostic = Arc::new(Mutex::new(None::<PathBuf>));
+    let callback_diagnostic = Arc::clone(&pending_diagnostic);
+    let event_diagnostic = Arc::clone(&pending_diagnostic);
     let callback_pending = Arc::clone(&pending_registration);
     let callback_project = Arc::clone(&current_project);
     let command_pending = Arc::clone(&pending_registration);
@@ -115,9 +118,17 @@ fn main() {
     .log_viewer_panel("logs")
     .language_settings_panel()
     .on_registry_access(move |registry| {
+        catalog_registration::diagnose_opened_project(&callback_diagnostic, &callback_project, registry);
         catalog_registration::process_pending(&callback_pending, &callback_project, registry, &callback_stage);
     })
     .on_project_event(move |event| {
+        if let Ok(mut diagnostic) = event_diagnostic.lock() {
+            match event.kind {
+                ProjectEventKind::Opened => *diagnostic = event.root.clone(),
+                ProjectEventKind::Created | ProjectEventKind::SavedAs | ProjectEventKind::Closed => *diagnostic = None,
+                _ => {}
+            }
+        }
         if matches!(event.kind, ProjectEventKind::Created | ProjectEventKind::Opened | ProjectEventKind::SavedAs | ProjectEventKind::Closed) {
             if let Ok(mut pending) = event_pending.lock() {
                 pending.request = None;

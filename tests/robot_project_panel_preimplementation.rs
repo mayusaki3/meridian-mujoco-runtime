@@ -205,8 +205,15 @@ fn mer_pp_tc_010_staged_provider_displays_unsaved_robot_without_disk_write() {
     let provider = StagedRobotProjectPanelProvider { stage };
     let nodes = provider.project_panel_roots(&project);
     assert_eq!(robot_nodes(&nodes).len(), 1);
-    assert!(matches!(&robot_nodes(&nodes)[0].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &id));
-    assert!(!project.application_directory().join("robot-catalog.json").exists());
+    assert!(
+        matches!(&robot_nodes(&nodes)[0].kind, AppPanelNodeKind::LogicalResource { resource_id, .. } if resource_id == &id)
+    );
+    assert!(
+        !project
+            .application_directory()
+            .join("robot-catalog.json")
+            .exists()
+    );
 }
 
 #[test]

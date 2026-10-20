@@ -87,6 +87,7 @@ fn main() {
     let current_project = Arc::new(Mutex::new(None::<PathBuf>));
     let catalog_stage = catalog_stage::SharedCatalogStage::default();
     let adapter_stage = Arc::clone(&catalog_stage);
+    let panel_stage = Arc::clone(&catalog_stage);
     let callback_stage = Arc::clone(&catalog_stage);
     let event_stage = Arc::clone(&catalog_stage);
     let pending_registration = catalog_registration::SharedPending::default();
@@ -110,7 +111,7 @@ fn main() {
     .panel(PanelDefinition::new("project", "meridian.panel.project", PanelKind::StandardUi))
     .panel(PanelDefinition::new("logs", "meridian.panel.logs", PanelKind::StandardUi))
     .layout(LayoutConfig::new(["project"]).split_below("project", 0.70, ["logs"]).selected("project"))
-    .application_project_panel("project", robot_project_panel::RobotProjectPanelProvider)
+    .application_project_panel("project", robot_project_panel::StagedRobotProjectPanelProvider { stage: panel_stage })
     .log_viewer_panel("logs")
     .language_settings_panel()
     .on_registry_access(move |registry| {

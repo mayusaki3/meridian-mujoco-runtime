@@ -82,3 +82,37 @@ impl ApplicationProjectPanelProvider for RobotProjectPanelProvider {
         AppPanelActionResult::NotHandled
     }
 }
+
+/// GUI provider: prefer the active project's in-memory Catalog over disk.
+pub struct StagedRobotProjectPanelProvider {
+    pub stage: crate::catalog_stage::SharedCatalogStage,
+}
+
+impl ApplicationProjectPanelProvider for StagedRobotProjectPanelProvider {
+    fn project_panel_roots(&self, project: &ProjectContext) -> Vec<AppPanelNode> {
+        match self.stage.lock() {
+            Ok(stage) => {
+                if let Some(catalog) = stage.snapshot(project.root()) {
+                    return catalog_nodes(catalog);
+                }
+            }
+            Err(error) => {
+                workflow_ide_framework::tracing::error!(
+                    target: "meridian::project_panel",
+                    error = %error,
+                    "Catalog stage lock poisoned"
+                );
+                return Vec::new();
+            }
+        }
+        RobotProjectPanelProvider.project_panel_roots(project)
+    }
+
+    fn handle_project_panel_action(
+        &mut self,
+        _project: &ProjectContext,
+        _action: AppPanelAction,
+    ) -> AppPanelActionResult {
+        AppPanelActionResult::NotHandled
+    }
+}

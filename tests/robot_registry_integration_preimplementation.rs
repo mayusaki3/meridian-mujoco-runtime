@@ -163,3 +163,42 @@ fn mer_reg_tc_006_registration_does_not_implicitly_persist_catalog() {
     assert_eq!(catalog.robots().len(), 1);
     assert!(controller.session.as_ref().unwrap().dirty.framework);
 }
+
+#[test]
+fn mer_reg_persist_tc_005_orphan_registry_reference_is_reported_without_mutation() {
+    use robot_catalog::RobotRepresentation;
+    use robot_registry_integration::unresolved_registry_references;
+    let mut controller = controller();
+    let mut catalog = RobotCatalog::default();
+    let robot_id = catalog.create("Orphan").unwrap();
+    catalog.add_representation(&robot_id, RobotRepresentation {
+        registry_resource_id: "missing-registry-id".into(),
+        format: "URDF".into(),
+        role: "source".into(),
+    }).unwrap();
+    let before = catalog.clone();
+    let missing = unresolved_registry_references(&catalog, &controller.registry_access().unwrap());
+    assert_eq!(missing.len(), 1);
+    assert_eq!(missing[0].robot_id, robot_id);
+    assert_eq!(missing[0].registry_resource_id, "missing-registry-id");
+    assert_eq!(missing[0].format, "URDF");
+    assert_eq!(missing[0].role, "source");
+    assert_eq!(catalog, before);
+    assert!(controller.resource_registry.entries().is_empty());
+}
+
+#[test]
+fn mer_reg_persist_tc_002_registered_references_are_resolved() {
+    use robot_registry_integration::unresolved_registry_references;
+    let mut controller = controller();
+    let mut catalog = RobotCatalog::default();
+    let reference = ResourceReference::new(ResourceScope::Project, "application/robot-source.urdf").unwrap();
+    {
+        let mut access = controller.registry_access().unwrap();
+        register_robot_representation(&mut access, &mut catalog, "Robot", reference, "URDF", "source").unwrap();
+    }
+    let before = catalog.clone();
+    assert!(unresolved_registry_references(&catalog, &controller.registry_access().unwrap()).is_empty());
+    assert_eq!(catalog, before);
+    assert_eq!(controller.resource_registry.entries().len(), 1);
+}

@@ -105,10 +105,12 @@ fn main() {
     let mjcf_import_project = Arc::clone(&current_project);
     let mjcf_reimport_project = Arc::clone(&current_project);
 
-    workflow_ide_framework::Application::new(
+    let application = workflow_ide_framework::Application::new(
         "meridian-mujoco-runtime",
         "Meridian MuJoCo Runtime",
-    )
+    );
+    let panel_refresh = application.project_panel_refresh_handle();
+    application
     .localization_resources("resources/meridian-locales")
     .project_adapter(runtime_project::StagedRuntimeProjectAdapter { stage: adapter_stage })
     .panel(PanelDefinition::new("project", "meridian.panel.project", PanelKind::StandardUi))
@@ -119,7 +121,7 @@ fn main() {
     .language_settings_panel()
     .on_registry_access(move |registry| {
         catalog_registration::diagnose_opened_project(&callback_diagnostic, &callback_project, registry);
-        catalog_registration::process_pending(&callback_pending, &callback_project, registry, &callback_stage);
+        catalog_registration::process_pending(&callback_pending, &callback_project, registry, &callback_stage, &panel_refresh);
     })
     .on_project_event(move |event| {
         if let Ok(mut diagnostic) = event_diagnostic.lock() {

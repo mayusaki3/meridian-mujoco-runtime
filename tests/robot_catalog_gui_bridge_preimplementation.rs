@@ -42,6 +42,7 @@ fn mer_reg_gui_tc_001_request_is_not_consumed_without_active_root() {
         &active,
         &mut controller.registry_access().unwrap(),
         &catalog_stage::SharedCatalogStage::default(),
+        &workflow_ide_framework::project_panel_api::ProjectPanelRefreshHandle::default(),
     );
     assert!(pending.lock().unwrap().request.is_some());
     assert!(controller.resource_registry.entries().is_empty());
@@ -66,6 +67,7 @@ fn mer_reg_gui_tc_002_other_project_request_is_not_processed() {
         &active,
         &mut controller.registry_access().unwrap(),
         &catalog_stage::SharedCatalogStage::default(),
+        &workflow_ide_framework::project_panel_api::ProjectPanelRefreshHandle::default(),
     );
     assert!(pending.lock().unwrap().request.is_some());
     assert!(controller.resource_registry.entries().is_empty());

@@ -33,6 +33,7 @@ pub fn process_pending(
     active_root: &Arc<Mutex<Option<PathBuf>>>,
     registry: &mut RegistryAccess<'_>,
     stage: &SharedCatalogStage,
+    panel_refresh: &workflow_ide_framework::project_panel_api::ProjectPanelRefreshHandle,
 ) {
     let root = active_root.lock().ok().and_then(|guard| guard.clone());
     let Some(root) = root else {
@@ -79,6 +80,7 @@ pub fn process_pending(
     })();
     match result {
         Ok(id) => {
+            panel_refresh.invalidate_application_project_panel();
             workflow_ide_framework::tracing::info!(target: "meridian::catalog", robot_id=%id, "Robot Catalog registration completed")
         }
         Err(error) => {

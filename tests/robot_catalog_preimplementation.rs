@@ -158,7 +158,9 @@ fn mer_cat_edit_tc_003_duplicate_shares_registry_id_but_not_robot_id() {
         source_namespace: "vendor".into(),
         source_id: "model".into(),
     };
-    let id = catalog.create_with_origin("Original", Some(origin)).unwrap();
+    let id = catalog
+        .create_with_origin("Original", Some(origin))
+        .unwrap();
     catalog
         .add_representation(
             &id,

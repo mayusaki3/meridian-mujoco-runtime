@@ -114,6 +114,14 @@ fn main() {
         "Meridian MuJoCo Runtime",
     );
     let panel_refresh = application.project_panel_refresh_handle();
+    let edit_refresh = panel_refresh.clone();
+    let remove_refresh = panel_refresh.clone();
+    let duplicate_stage = Arc::clone(&catalog_stage);
+    let duplicate_selection = Arc::clone(&selected_robot);
+    let duplicate_project = Arc::clone(&current_project);
+    let remove_stage = Arc::clone(&catalog_stage);
+    let remove_selection = Arc::clone(&selected_robot);
+    let remove_project = Arc::clone(&current_project);
     application
     .localization_resources("resources/meridian-locales")
     .project_adapter(runtime_project::StagedRuntimeProjectAdapter { stage: adapter_stage })
@@ -206,6 +214,60 @@ fn main() {
         }
     }).requires_stored_project())
     .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.catalog.register_urdf"))
+    .command(CommandDefinition::new("runtime.catalog.duplicate_selected", "選択Robotを複製", move || {
+        let root = duplicate_project.lock().ok().and_then(|guard| guard.clone());
+        let id = duplicate_selection.lock().ok().and_then(|guard| guard.clone());
+        let (Some(root), Some(id)) = (root, id) else { return; };
+        let name = duplicate_stage.lock().ok().and_then(|guard| {
+            guard.snapshot(&root)?.robots().iter()
+                .find(|robot| robot.robot_id == id)
+                .map(|robot| format!("{} Copy", robot.name))
+        });
+        let Some(name) = name else { return; };
+        match catalog_edit::apply_with_panel_refresh(
+            &duplicate_stage, &root,
+            catalog_edit::Edit::Duplicate { robot_id: id, name },
+            &edit_refresh,
+        ) {
+            Ok(catalog_edit::EditResult::Duplicated { robot_id }) => {
+                if let Ok(mut selected) = duplicate_selection.lock() { *selected = Some(robot_id); }
+            }
+            Ok(_) => {}
+            Err(error) => workflow_ide_framework::tracing::error!(
+                target: "meridian::catalog", error = %error, "Robot duplication failed"
+            ),
+        }
+    }).requires_stored_project())
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.catalog.duplicate_selected"))
+    .command(CommandDefinition::new("runtime.catalog.remove_selected", "選択Robotを削除...", move || {
+        let root = remove_project.lock().ok().and_then(|guard| guard.clone());
+        let id = remove_selection.lock().ok().and_then(|guard| guard.clone());
+        let (Some(root), Some(id)) = (root, id) else { return; };
+        let name = remove_stage.lock().ok().and_then(|guard| {
+            guard.snapshot(&root)?.robots().iter()
+                .find(|robot| robot.robot_id == id)
+                .map(|robot| robot.name.clone())
+        });
+        let Some(name) = name else { return; };
+        let confirmed = rfd::MessageDialog::new()
+            .set_title("Robot Catalog")
+            .set_description(format!("Robot「{name}」をCatalogから削除しますか？\\n登録リソースと実ファイルは削除されません。"))
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .show();
+        if confirmed != rfd::MessageDialogResult::Yes { return; }
+        let refresh = remove_refresh.clone();
+        match catalog_edit::apply_with_panel_refresh(
+            &remove_stage, &root,
+            catalog_edit::Edit::Remove { robot_id: id },
+            &refresh,
+        ) {
+            Ok(_) => { if let Ok(mut selected) = remove_selection.lock() { *selected = None; } }
+            Err(error) => workflow_ide_framework::tracing::error!(
+                target: "meridian::catalog", error = %error, "Robot removal failed"
+            ),
+        }
+    }).requires_stored_project())
+    .menu_item(MenuItemDefinition::custom_key("data", "meridian.menu.data", "runtime.catalog.remove_selected"))
     .command(CommandDefinition::new("runtime.urdf.export", "URDFエクスポート...", move || {
         let capture = logging::dialog_on_key("meridian.urdf.export.result.title");
         let _operation = capture.span().enter();

@@ -1,3 +1,4 @@
+mod catalog_edit;
 mod catalog_registration;
 mod catalog_stage;
 mod localized_errors;

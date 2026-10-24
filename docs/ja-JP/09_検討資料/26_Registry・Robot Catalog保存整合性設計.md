@@ -75,6 +75,6 @@ Framework開発側から以下の回答を受領した。
 - メニューから既存URDFを新規Robotとして登録した直後、`Project Panel refresh requested after Catalog registration` を確認。
 - 続けて `Project Panel snapshot requested` に `source="stage" robots=3` を確認。保存操作なしでProject Panelに3件表示。**即時更新PASS**。
 - 以前の「保存するまで表示されない」現象は、ローカル `develop` がリモートより5コミット古く、更新通知処理を含まないバイナリで実行していたことが原因。
-- `cargo run` は成功。`cargo test --workspace` はWindowsのページングファイル不足（OS error 1455）でコンパイル停止し、テスト結果は未確定。`cargo fmt --all -- --check` は既存の整形差分により失敗。いずれも別途再検証する。
+- `cargo run` は成功。初回の `cargo test --workspace` はWindowsのページングファイル不足（OS error 1455）でコンパイル停止。その後 `CARGO_BUILD_JOBS=1`、`CARGO_INCREMENTAL=0`、`cargo test --workspace -j 1` で **94/94 PASS**。`cargo fmt --all` 後の `cargo fmt --all -- --check` も **PASS**。整形差分3ファイルはローカル未コミット。
 - ローカルの未コミット変更3ファイルはstashへ退避済み。差分確認まで `stash pop/drop` は実施しない。
 - Framework側の変更は不要だった。

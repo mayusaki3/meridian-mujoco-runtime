@@ -121,6 +121,17 @@ impl RobotCatalog {
         Ok(new_id)
     }
 
+    /// Remove only the logical Robot. Registry entries and files remain owned elsewhere.
+    pub fn remove(&mut self, id: &str) -> io::Result<()> {
+        let index = self
+            .robots
+            .iter()
+            .position(|robot| robot.robot_id == id)
+            .ok_or_else(|| invalid("Robot not found"))?;
+        self.robots.remove(index);
+        Ok(())
+    }
+
     pub fn add_representation(
         &mut self,
         id: &str,

@@ -97,7 +97,6 @@ fn main() {
     let pending_registration = catalog_registration::SharedPending::default();
     let pending_diagnostic = Arc::new(Mutex::new(None::<PathBuf>));
     let callback_diagnostic = Arc::clone(&pending_diagnostic);
-    let callback_stage = Arc::clone(&catalog_stage);
     let event_diagnostic = Arc::clone(&pending_diagnostic);
     let callback_pending = Arc::clone(&pending_registration);
     let callback_project = Arc::clone(&current_project);

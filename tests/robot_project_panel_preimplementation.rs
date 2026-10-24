@@ -202,7 +202,10 @@ fn mer_pp_tc_010_staged_provider_displays_unsaved_robot_without_disk_write() {
         guard.activate(project.root(), RobotCatalog::default());
         guard.replace(project.root(), catalog).unwrap();
     }
-    let provider = StagedRobotProjectPanelProvider { stage, selection: Default::default() };
+    let provider = StagedRobotProjectPanelProvider {
+        stage,
+        selection: Default::default(),
+    };
     let nodes = provider.project_panel_roots(&project);
     assert_eq!(robot_nodes(&nodes).len(), 1);
     assert!(

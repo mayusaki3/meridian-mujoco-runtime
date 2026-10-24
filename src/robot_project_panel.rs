@@ -92,7 +92,11 @@ pub struct StagedRobotProjectPanelProvider {
 /// Only direct Robot nodes may be edited; categories and representations are excluded.
 pub fn robot_id_from_node_id(node_id: &str) -> Option<&str> {
     let id = node_id.strip_prefix("robot:")?;
-    if id.is_empty() || id.contains(':') { None } else { Some(id) }
+    if id.is_empty() || id.contains(':') {
+        None
+    } else {
+        Some(id)
+    }
 }
 
 impl ApplicationProjectPanelProvider for StagedRobotProjectPanelProvider {
@@ -136,14 +140,26 @@ impl ApplicationProjectPanelProvider for StagedRobotProjectPanelProvider {
         if let AppPanelAction::Selected { node_ids } = action {
             let selected = if node_ids.len() == 1 {
                 robot_id_from_node_id(&node_ids[0]).and_then(|id| {
-                    self.stage.lock().ok()?.snapshot(project.root())?
-                        .robots().iter().find(|robot| robot.robot_id == id)
+                    self.stage
+                        .lock()
+                        .ok()?
+                        .snapshot(project.root())?
+                        .robots()
+                        .iter()
+                        .find(|robot| robot.robot_id == id)
                         .map(|robot| robot.robot_id.clone())
                 })
-            } else { None };
+            } else {
+                None
+            };
             match self.selection.lock() {
-                Ok(mut selection) => { *selection = selected; AppPanelActionResult::Handled }
-                Err(_) => AppPanelActionResult::Rejected { reason: "Robot selection lock poisoned".into() },
+                Ok(mut selection) => {
+                    *selection = selected;
+                    AppPanelActionResult::Handled
+                }
+                Err(_) => AppPanelActionResult::Rejected {
+                    reason: "Robot selection lock poisoned".into(),
+                },
             }
         } else {
             AppPanelActionResult::NotHandled

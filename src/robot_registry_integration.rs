@@ -40,7 +40,6 @@ pub fn register_robot_representation(
     Ok(robot_id)
 }
 
-
 /// An unresolved Framework Registry reference, retaining the owning Robot identity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnresolvedRegistryReference {
@@ -73,4 +72,3 @@ pub fn unresolved_registry_references(
     }
     unresolved
 }
-

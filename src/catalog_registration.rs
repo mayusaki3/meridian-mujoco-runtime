@@ -120,8 +120,9 @@ pub fn diagnose_opened_project(
     let context = ProjectContext::new(active.clone());
     match RuntimeProjectAdapter::load_catalog(&context) {
         Ok(catalog) => {
-            let unresolved =
-                crate::robot_registry_integration::unresolved_registry_references(&catalog, registry);
+            let unresolved = crate::robot_registry_integration::unresolved_registry_references(
+                &catalog, registry,
+            );
             for item in &unresolved {
                 workflow_ide_framework::tracing::warn!(
                     target: "meridian::registry",

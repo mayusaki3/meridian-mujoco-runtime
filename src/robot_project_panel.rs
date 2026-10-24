@@ -93,6 +93,13 @@ impl ApplicationProjectPanelProvider for StagedRobotProjectPanelProvider {
         match self.stage.lock() {
             Ok(stage) => {
                 if let Some(catalog) = stage.snapshot(project.root()) {
+                    workflow_ide_framework::tracing::info!(
+                        target: "meridian::project_panel",
+                        project = %project.root().display(),
+                        robots = catalog.robots().len(),
+                        source = "stage",
+                        "Project Panel snapshot requested"
+                    );
                     return catalog_nodes(catalog);
                 }
             }
@@ -105,6 +112,12 @@ impl ApplicationProjectPanelProvider for StagedRobotProjectPanelProvider {
                 return Vec::new();
             }
         }
+        workflow_ide_framework::tracing::info!(
+            target: "meridian::project_panel",
+            project = %project.root().display(),
+            source = "disk",
+            "Project Panel snapshot requested"
+        );
         RobotProjectPanelProvider.project_panel_roots(project)
     }
 

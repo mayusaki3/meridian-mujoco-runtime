@@ -32,7 +32,12 @@ pub fn apply(
             .map_err(|_| io::Error::other("Catalog stage lock poisoned"))?;
         let mut candidate = guard
             .snapshot(root)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Catalog stage is not active for project"))?
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Catalog stage is not active for project",
+                )
+            })?
             .clone();
         let result = match edit {
             Edit::Rename { robot_id, name } => {

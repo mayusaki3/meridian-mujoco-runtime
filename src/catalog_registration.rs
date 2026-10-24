@@ -81,6 +81,11 @@ pub fn process_pending(
     match result {
         Ok(id) => {
             panel_refresh.invalidate_application_project_panel();
+            workflow_ide_framework::tracing::info!(
+                target: "meridian::project_panel",
+                robot_id = %id,
+                "Project Panel refresh requested after Catalog registration"
+            );
             workflow_ide_framework::tracing::info!(target: "meridian::catalog", robot_id=%id, "Robot Catalog registration completed")
         }
         Err(error) => {

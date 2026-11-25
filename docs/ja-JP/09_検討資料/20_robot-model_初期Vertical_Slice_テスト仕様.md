@@ -22,8 +22,8 @@ URDFを外部交換表現として読み込み、中立なcanonical `RobotDefini
 初期対象は次とする。
 
 - `robot-model`: RobotDefinition、Link、Joint、最小Asset参照、domain ID、構造Validation
-- `robot-model-import`: URDF parse / conversion、Import diagnostics
-- canonical persistence: RobotDefinitionの保存・再読込
+- `robot-model-import`: XML構文解析、URDF意味検証、canonical conversion、Import diagnostics
+- canonical persistence: RobotDefinitionとSourceDocumentの独立保存・再読込、関連付け
 - test fixture: 本リポジトリで作成する最小URDF
 
 Microbanは実Robotの統合検証候補として扱うが、初期unit test fixtureへ第三者配布物をコピーしない。Microbanを使用する統合検証は、対象versionとlicense条件を確認した別手順とする。
@@ -57,6 +57,7 @@ Mesh fileを必要とするfixtureは初期必須にしない。Asset参照は�
 - Linkが2件生成される。
 - Jointが1件生成される。
 - fatal diagnosticがない。
+- SourceDocumentが保持され、管理層でRobotDefinitionとの関連付けとSource Mappingが確立される。
 
 ### RM-002 Link identityと参照
 
@@ -146,11 +147,11 @@ byte単位のJSON一致は要求しない。
 - 未対応要素・属性をPreserved Dataとして保持し、同一形式へのExportで復元できる。
 - silent discardしない。
 
-### RM-012 malformed URDF
+### RM-012 XML構文エラー
 
-**入力:** XMLまたはURDF構造として不正なfixture。
+**入力:** 閉じタグ不一致等、XML構文として不正なURDF fixture。
 
-**期待結果:** Importが失敗し、panicせずerrorを返す。
+**期待結果:** 通常Importが失敗し、panicせずXML構文エラーを識別可能な診断を返す。RobotDefinitionを生成しない。
 
 ### RM-013 Asset参照
 
@@ -194,7 +195,7 @@ Project Resource Registryへの実登録はこのlibrary unit testの対象外�
 - URDF parserを自作するか既存crateを利用するか
 - Import diagnosticsの最低限の分類
 
-上記確定後、RM-001から順にtestを実装し、対象scopeのunit test coverage 100%を目標とする。
+上記確定後、RM-001から順にtestを実装し、対象scopeのunit test coverage 100%を必須完了条件とする。対象実装の変更前に対応するテストを作成する。
 
 ## 7. 座標・単位・frame変換テスト
 
@@ -264,9 +265,9 @@ Project Resource Registryへの実登録はこのlibrary unit testの対象外�
 
 ### RM-026 canonical保存・再読込後の復元
 
-**入力:** RM-025のRobotDefinition。
+**入力:** RM-025のRobotDefinition、独立したSourceDocumentおよび関連付け。
 
-**操作:** canonical保存、再読込、URDF Export。
+**操作:** 両データと関連付けを保存し、元URDFファイルを参照せず再読込、URDF Export。
 
 **期待結果:** 未対応要素・属性の意味と階層・配置が維持される。元URDFファイルは不要。
 
@@ -302,7 +303,7 @@ Project Resource Registryへの実登録はこのlibrary unit testの対象外�
 
 ### RM-031 異形式Export
 
-**入力:** URDF固有のPreserved Dataを含むRobotDefinition。
+**入力:** RobotDefinitionと、URDF固有のPreserved Dataを保持する関連SourceDocument。
 
 **操作:** 将来のMJCF等へのExportを想定。
 
@@ -315,3 +316,98 @@ Project Resource Registryへの実登録はこのlibrary unit testの対象外�
 **期待結果:** 保持保証範囲をformat adapterの仕様で明示し、保証対象を保存・復元できる。byte一致を保証しない情報は診断・仕様で明確化する。
 
 実装順序はRM-025〜RM-030をURDF Import / Exportの初期完了条件へ含める。RM-031は異形式Exporter導入時のgate、RM-032はXML保持保証範囲確定後に期待値を具体化する。
+
+## 9. URDF意味検証・独立保持テスト
+
+### RM-033 意味検証エラー時の保持
+
+**入力:** XML構文は正常だが、存在しないparentまたはchild Linkを参照するURDF fixture（各ケースを個別に検証）。
+
+**期待結果:**
+
+- XML構文エラーと区別した意味検証診断を返す。
+- SourceDocumentと元XML、診断結果を保持する。
+- RobotDefinitionを生成せず、関連付けを作成しない。
+- 通常のモデルExportおよびシミュレーション対象としない。
+
+RM-006・RM-007はcanonical構造Validationとして維持し、本ケースはURDF入力境界を検証する。
+
+### RM-034 複数診断
+
+**入力:** 独立して検出可能な複数の意味検証エラーを含むURDF fixture。
+
+**期待結果:** 最初のエラーだけで打ち切らず、各問題を識別可能な診断として収集する。SourceDocumentを保持し、RobotDefinitionを生成しない。
+
+### RM-035 Link / Joint循環
+
+**入力:** Link / Jointの参照関係に循環を含むURDF fixture。
+
+**期待結果:** 循環を意味検証エラーとして診断する。SourceDocumentを保持し、RobotDefinitionを生成しない。
+
+### RM-036 Mimic連鎖
+
+**入力:** 存在するJointを参照する非循環のmimic連鎖を持つ、その他の意味検証条件を満たすURDF fixture。
+
+**期待結果:** 連鎖自体を意味検証エラーとしない。Simulator固有の対応可否とは区別する。canonical表現の詳細は実装前に確定する。
+
+### RM-037 Mimic不正参照・循環
+
+**入力:** 存在しないJointへのmimic参照、自己参照、複数Joint間のmimic循環をそれぞれ含むfixture。
+
+**期待結果:** 各ケースを意味検証エラーとして診断し、SourceDocumentを保持する。RobotDefinitionを生成しない。
+
+### RM-038 Simulator検証の分離
+
+**入力:** URDFとして有効で、対象Simulatorでは未対応となる機能を含むfixture。
+
+**操作:** URDF意味検証・canonical変換を行い、その後、未対応機能を明示したSimulator検証境界で検証する。
+
+**期待結果:** Simulator未対応のみを理由としてURDF意味検証を失敗させない。canonical変換成功時はRobotDefinitionを生成する。Simulator側の診断は別途返す。実Simulatorの起動は本ケースの対象外とする。
+
+### RM-039 意味検証エラーと未知情報の保持
+
+**入力:** 意味検証エラーに加え、未知要素・未知属性を含むURDF fixture。
+
+**期待結果:** 意味検証診断と未知情報の診断を区別し、元XMLとPreserved Dataを保持する。domain IDとの対応を必須とせず、RobotDefinitionを生成しない。
+
+### RM-040 修正後の再検証
+
+**入力:** RM-033で保持したSourceDocument。
+
+**操作:** 意味検証エラーが残る修正を行って再検証し、その後すべての意味検証エラーを解消して再検証する。
+
+**期待結果:** エラーが残る間は診断を更新し、RobotDefinitionを生成しない。解消後にcanonical変換が成功した場合、RobotDefinition、Source Mappingおよび関連付けを生成する。
+
+### RM-041 SourceDocument単独の永続化
+
+**入力:** RM-039で保持したSourceDocument。
+
+**操作:** RobotDefinitionなしで保存し、元URDFファイルを参照せず再読込する。
+
+**期待結果:** 元XML、Preserved Data、診断結果を復元できる。RobotDefinitionや関連付けの存在を要求しない。
+
+### RM-042 警告のみのImport
+
+**入力:** 意味検証エラーがなく警告のみが発生するURDF fixture。
+
+**期待結果:** 警告を保持し、canonical変換成功時にRobotDefinitionと関連付けを生成する。
+
+### RM-043 SourceDocumentを持たないRobotDefinition
+
+**入力:** 外部形式からImportせず直接作成した正常なRobotDefinition。
+
+**操作:** 構造Validation、保存、再読込を行う。
+
+**期待結果:** SourceDocumentや関連付けを要求せず、正常なRobotDefinitionを復元できる。
+
+### RM-044 Export出力の再検証
+
+**入力:** 正常なRobotDefinitionと関連SourceDocumentを用いるExport検証fixture。
+
+**期待結果:** 出力のXML構文解析、URDF意味検証、Known DataおよびPreserved Dataの復元確認が成功した場合のみ完全Export成功とする。いずれかの確認に失敗する場合は完全Export成功としない。
+
+RM-033〜RM-044は資料21・22の確定済み処理境界を検証する。個別の意味検証規則一覧、診断コード、永続化schema、関連付けの多重度および既存RobotDefinitionへの再Import規則は別途確定し、必要な詳細ケースを追加する。
+
+---
+
+[目次](../目次.md) > 検討資料 > robot-model 初期Vertical Slice テスト仕様

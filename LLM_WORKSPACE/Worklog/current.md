@@ -1,6 +1,6 @@
 # Worklog
 
-更新日: 2026-11-25 (JST)
+更新日: 2026-11-26 (JST)
 対象ブランチ: develop
 
 ## 現在工程
@@ -16,6 +16,9 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 - URDF編集方法は現段階では限定しない。
 
 - SourceDocumentとRobotDefinitionは独立して保持し、管理層で関連付ける（A案、2026-11-25合意）。Source Mappingとdomain IDの対応は意味検証成功後のRobotDefinition生成時に確立する。
+
+- URDFの独立した複数Linkツリー（SV-016）は意味検証エラーとする（A案、2026-11-26条件付き合意）。標準URDF 1.0〜1.2に動的な分離・合体を記述する標準機構はなく、単一ルートのツリーを前提とする。分離・合体型ロボットの上位管理方式は別途検討し、中立モデルへの制約としては確定しない。
+- 根拠: https://github.com/ros/urdfdom および https://github.com/ros2/ros2_documentation/blob/rolling/source/Capabilities/Simulation/URDF/Building-a-Visual-Robot-Model-with-URDF-from-Scratch.rst
 
 ## 最新正本・更新対象
 - [資料20](../../docs/ja-JP/09_検討資料/20_robot-model_初期Vertical_Slice_テスト仕様.md)

@@ -13,14 +13,16 @@ canonical_document: true
 
 ## 1. 対象
 
-テスト仕様20のRM-001〜RM-024を実装するための初期Rust型・責務境界を定義する。現段階は設計のみとし、既存Meridian Runtime / workflow-ide-frameworkの実装を変更しない。
+テスト仕様20に定義する初期検証を実施するための初期Rust型・責務境界を定義する。現段階は設計のみとし、既存Meridian Runtime / workflow-ide-frameworkの実装を変更しない。
 
 ## 2. Crate境界
 
 - `robot-model`: 中立なRobotDefinition、domain ID、frame、数値型、構造Validation。
-- `robot-model-import`: URDF入力、parse、canonical変換、diagnostic。
+- `robot-model-import`: URDF入力、XML構文解析、URDF意味検証、SourceDocument生成、canonical変換、diagnostic。
 - `robot-model-persistence`（分離は保留）: canonical JSONの保存・読込。初期はrobot-modelのfeature/moduleとしてもよいが、schemaとdomain型を同一視しない。
 - `robot-coordinate-adapter`（分離は保留）: ROS系とSansaXR系の座標変換。初期は純粋関数で検証し、VR runtime依存を入れない。
+
+SourceDocumentとRobotDefinitionは独立して保持し、管理層が関連付けと永続化を担当する。管理層の具体的なcrate配置は未確定とする。
 
 依存は `robot-model-import -> robot-model` とし、robot-modelはImporter、MuJoCo、Meridian、workflow-ide-frameworkへ依存しない。
 
@@ -46,11 +48,30 @@ canonical_document: true
 
 Schema migrationはRuntime Application data_versionとの責務関係を確認してから確定する。保存・再読込でdomain構造が一致することをRM-009で検証する。
 
-## 6. URDF parser
+## 6. URDF解析・意味検証
 
 既存Rust URDF parser crateを調査・評価して採用候補を選定する。自作XML parserは初期既定としない。選定時はlicense、URDF要素の対応範囲、unsupported情報の検出可否、保守状況、依存関係を確認する。
 
-Parser固有型をrobot-model Public APIへ露出しない。ImportResultは成功値と非fatal diagnosticsを同時に返せる構造とする。最低限の分類は `Warning`、`Unsupported`、`MissingAsset`、`Approximated` とし、致命的なparse / structure errorは別途errorで返す。
+Parser固有型をrobot-model Public APIへ露出しない。
+
+### 6.1 処理境界
+
+1. XML構文解析を行う。構文エラーの場合は通常Importを失敗とし、診断を返す。
+2. 構文解析成功後、元XMLと形式固有情報をSourceDocumentとして保持し、URDF意味検証を行う。
+3. 意味検証エラーがある場合はSourceDocumentと診断結果を保持し、RobotDefinitionを生成しない。シミュレーション対象としない。
+4. 意味検証エラーがなく、canonical変換に成功した場合にRobotDefinitionを生成する。警告のみの場合は生成を妨げない。
+5. Source Mappingとdomain IDの対応を確立し、管理層でSourceDocumentとRobotDefinitionを関連付ける。
+6. Simulator固有の対応可否・変換検証は、対象Simulatorを使用する段階で別途行う。
+
+SourceDocument修正後は構文解析・意味検証を再実行し、診断結果を更新する。意味検証エラーが解消した場合にRobotDefinitionを生成する。編集方法は限定しない。
+
+### 6.2 診断
+
+ImportResultはSourceDocument、任意のRobotDefinition、診断結果を区別して扱える構造とする。XML構文解析失敗は別途errorで返す。意味検証では検出可能な複数の問題を収集する。
+
+既存の診断分類候補 `Warning`、`Unsupported`、`MissingAsset`、`Approximated` を維持し、XML構文エラー、URDF意味検証エラー、Simulator未対応、Simulator変換エラーを区別する。具体的な型・コード体系は別途確定する。
+
+Simulator固有の未対応機能を理由に、URDF自体の意味検証エラーと判定しない。個別の意味検証規則と期待結果はテスト仕様20と整合させる。
 
 ## 7. Frame変換とVR
 
@@ -66,11 +87,12 @@ ROS系からSansaXR系への基底変換は `(x,y,z) -> (-y,z,x)`、行列 `C` �
 
 ## 8. 初期実装順序と完了条件
 
-1. 独自最小URDF fixtureとRM-001〜RM-015を実装する。
-2. canonical round-tripとImport diagnosticsを確認する。
-3. RM-016〜RM-024のframe / unit / VR adapter数学テストを実装する。
-4. 全対象テストの成功、追加実装のunit test coverage 100%を検証する。
-5. Microban等の第三者Robotを使った統合検証はlicense確認後に別途行う。
+1. 資料20・22と本資料の整合を確認し、設計・テスト仕様を確定する。
+2. 対象テストを先に作成し、その後に対象実装を変更する。
+3. canonical round-tripとImport diagnosticsを確認する。
+4. RM-016〜RM-024のframe / unit / VR adapter数学テストを実装する。
+5. 全対象テストの成功、追加実装のunit test coverage 100%を検証する。
+6. Microban等の第三者Robotを使った統合検証はlicense確認後に別途行う。
 
 ## 9. 未決事項
 
@@ -105,11 +127,14 @@ SansaVRMと同様に、Import時に未対応情報を捨てず、canonical保存
 - Known Data: robot-modelが解釈するLink、Joint、Frame、Inertial等。
 - Preserved Data: importerが意味を解釈しない要素・属性・拡張情報。source formatとformat version（判別可能な場合）、元のXML断片またはlossless表現、順序・配置情報を保持する。
 - Source Mapping: source要素の安定した参照先とdomain IDの対応を保持する。Link / Jointの表示名変更だけで紐付けを失わない。
-- Canonical persistenceはPreserved DataとSource Mappingも保存する。元ファイルの存在を復元の前提としない。
+- SourceDocumentはRobotDefinitionから独立して保持する。意味検証エラー時も元XMLと診断結果を保持し、domain IDとの対応が未確定でも保存できる。
+- 永続化ではRobotDefinition、SourceDocument、Preserved Data、Source Mappingおよび関連付けを保持する。元ファイルの存在を復元の前提としない。
 
 形式固有のXML構造をrobot-modelの物理domain属性へ無理に変換しない。URDF、将来のMJCF等の保持・復元規則は各format adapterが担当する。
 
 ### 11.2 Export規則
+
+通常のモデルExportは正常なRobotDefinitionを前提とする。SourceDocumentのみの保持・編集とは区別する。
 
 1. 既知項目は現在のcanonical modelから出力する。
 2. 未対応項目はSource Mappingに従って元の位置・順序・所有要素へ復元する。
@@ -128,3 +153,7 @@ Importerは、未対応情報を発見したときdiagnosticとpreserved payload
 ### 11.4 追加検証
 
 テスト仕様20のRM-011を「検出・保持・再Export」へ強化し、RM-025以降でcanonical round-trip、既知属性編集、名称変更、要素削除、参照衝突、異形式Export時の扱いを検証する。
+
+---
+
+[目次](../目次.md) > 検討資料 > robot-model 実装前型・変換境界設計

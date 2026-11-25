@@ -20,6 +20,9 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 - URDFの独立した複数Linkツリー（SV-016）は意味検証エラーとする（A案、2026-11-26条件付き合意）。標準URDF 1.0〜1.2に動的な分離・合体を記述する標準機構はなく、単一ルートのツリーを前提とする。分離・合体型ロボットの上位管理方式は別途検討し、中立モデルへの制約としては確定しない。
 - 根拠: https://github.com/ros/urdfdom および https://github.com/ros2/ros2_documentation/blob/rolling/source/Capabilities/Simulation/URDF/Building-a-Visual-Robot-Model-with-URDF-from-Scratch.rst
 
+- SV-016の追加決定（2026-11-26、A案）：通常Importでは複数ツリーを意味検証エラーとするが、利用者承認後の分割Importを初版で提供する。各独立ツリーを個別検証し、正常なもののみRobotDefinitionを生成する（部分成功許容）。拒否時はSourceDocumentのみ保持する。元XMLは変更しない。ツリー間Mimic参照は分割後の検証対象とし、所属不明の拡張情報は勝手に割り当てず保持・診断する。
+- 一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する。分割後のExportにおける共有情報・所属不明情報の扱いは未確定。
+
 ## 最新正本・更新対象
 - [資料20](../../docs/ja-JP/09_検討資料/20_robot-model_初期Vertical_Slice_テスト仕様.md)
 - [資料21](../../docs/ja-JP/09_検討資料/21_robot-model_実装前型・変換境界設計.md)
@@ -34,11 +37,12 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 ## 最新正本との照合結果
 - 資料20 RM-012をXML構文エラーに限定し、RM-006・007はcanonical構造検証として維持。RM-033〜044を追加し、意味検証・複数診断・循環・mimic・Simulator分離・未知情報保持・再検証・独立永続化・警告・直接作成・Export再検証を定義。
 - 資料21 第6章はXML構文解析と意味検証の分離、SourceDocument保持、Simulator検証分離へ更新済み。管理層の具体的crate配置、診断コード体系は未確定。
-- 資料22 第2・3章はSourceDocumentの独立保持と管理層の関連付けに更新済み。関連付けの多重度・具体的schemaは未確定。
+- 資料22 第2・3章はSourceDocumentの独立保持と管理層の関連付けに更新済み。一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する方針は確定、資料への反映と具体的schemaは未完了。
 - 資料22 第4章は意味検証をcanonical変換前に行い、未生成状態から再検証する手順に更新済み。既存RobotDefinitionの再Import更新規則は保留。
 - 資料22 第5章は正常なRobotDefinitionを通常モデルExportの前提とし、出力の再解析・意味検証・復元確認後に完全Export成功とするよう更新済み。
 
 ## 次工程
+- SV-016の分割Import・部分成功・関連付け方針を資料20・21・22へ反映する。分割後のExport規則を整理する。
 - 個別URDF意味検証規則と診断の詳細を確定し、資料21および資料20の詳細ケースに反映する。
 - 管理層の配置、永続化schema、関連付けの多重度、既存RobotDefinitionへの再Import規則など実装前未確定事項を整理する。
 - 設計・テスト仕様の確定後にテスト作成、実装へ進む。

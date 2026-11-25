@@ -1,6 +1,6 @@
 # Worklog
 
-更新日: 2026-11-24 (JST)
+更新日: 2026-11-25 (JST)
 対象ブランチ: develop
 
 ## 現在工程
@@ -14,6 +14,8 @@ URDF意味検証・非破壊Import/Exportの設計差分確認。資料20・21�
 - Source Document修正後に構文・意味検証を再実行し、意味検証エラーが解消した場合にRobotDefinitionを生成する。
 - URDF意味検証とSimulator固有検証を分離する。
 - URDF編集方法は現段階では限定しない。
+
+- SourceDocumentとRobotDefinitionは独立して保持し、管理層で関連付ける（A案、2026-11-25合意）。Source Mappingとdomain IDの対応は意味検証成功後のRobotDefinition生成時に確立する。
 
 ## 最新正本・更新対象
 - [資料20](../../docs/ja-JP/09_検討資料/20_robot-model_初期Vertical_Slice_テスト仕様.md)
@@ -34,7 +36,7 @@ URDF意味検証・非破壊Import/Exportの設計差分確認。資料20・21�
 - 資料22 第5章の通常モデルExportは正常なRobotDefinitionを前提とする。
 
 ## 次工程
-- SourceDocumentの独立保持とRobotDefinitionとの関連付けの概念設計を確認する。
+- SourceDocumentの独立保持とRobotDefinitionとの関連付けの概念設計はA案で確定済み。資料20・21・22へ反映するための差分を確定する。
 - 設計・テスト仕様の差分を確定し、反映する。RM-012および関連既存テストの期待結果を見直し、追加テスト候補RM-033〜RM-039を整理する。
 - 設計・テスト仕様の確定後にテスト作成、実装へ進む。
 - 工程進捗、決定事項、検証結果に応じて本Worklogを更新する。

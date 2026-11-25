@@ -25,16 +25,23 @@ struct RobotDefinition {
     name: String,
     links: Vec<Link>,
     joints: Vec<Joint>,
-    // canonical物理モデルに形式固有XMLを混入させない
-    source_documents: Vec<SourceDocument>,
+    // 形式固有情報は所有しない
 }
 
 struct SourceDocument {
     id: SourceDocumentId,
     format: SourceFormat,           // 初期: Urdf
     format_version: Option<String>,
+    original_xml: String,          // 元XMLを独立して保持
     preserved: Vec<PreservedNode>,
-    mappings: Vec<SourceMapping>,
+    mappings: Vec<SourceMapping>,   // 意味検証成功後にdomain IDと対応
+    diagnostics: Vec<Diagnostic>,
+}
+
+// 管理層が保持する関連付けの概念型
+struct SourceAssociation {
+    source_document_id: SourceDocumentId,
+    robot_id: RobotId,
 }
 
 struct SourceMapping {
@@ -63,9 +70,12 @@ enum ExportOutcome {
 
 これは**概念的な型**であり、正確なRust API・serde schemaを確定したものではない。特に `SourceNodeKey` は元ファイルの位置情報だけをIDとして使用せず、Import時に生成した安定識別子をcanonicalへ保存する。domain IDとSourceNodeKeyは異なる。
 
+SourceDocumentとRobotDefinitionは独立して保存する。管理層が関連付けを保持し、RobotDefinition未生成時は関連付けを作成しない。直接作成したRobotDefinitionはSourceDocumentを必須としない。SourceAssociationは責務を示す概念型であり、具体的な永続化形式・crate配置・関連付けの多重度は未確定とする。
+
 ## 3. 所有関係・配置
 
-- `SourceOwner` はdomain IDでLink / Jointを参照する。表示名では参照しない。
+- `SourceOwner` はdomain IDでLink / Jointを参照する。表示名では参照しない。意味検証成功後に対応を確立する。
+- 意味検証エラー時はdomain IDへの対応を必須とせず、元XMLとsource keyに基づく情報および診断をSourceDocumentに保持する。
 - `Placement` は既知要素を含む元の兄弟順序を復元できるよう、親要素のSourceNodeKey、兄弟アンカー、順序を保持する。
 - 未知要素の**内部**は順序・属性・子要素を保持する。未知要素内の参照文字列を、意味が不明なまま自動変更しない。
 - 既知要素に付いた未知属性も、対応する既知要素へ再付与する。既知属性と同じ展開名（namespace URI + local name）で衝突した場合はConflictとする。
@@ -73,23 +83,33 @@ enum ExportOutcome {
 
 ## 4. Import処理
 
-1. 元XMLを構造解析し、要素・属性・順序・namespaceとsource keyを取得する。
-2. 既知URDFの解析結果をcanonical Link / Joint等へ変換する。
-3. XML source keyとdomain IDを対応付ける。
-4. 既知モデルへ写像されなかったXML情報をPreservedNodeへ保存する。
-5. 未知情報がある場合はdiagnosticを出すが、保持可能ならImport成功を認める。
-6. 対応付け不能、XML構造破損、または保持に失敗した場合は、完全な非破壊Import成功とはしない。
+1. 元XMLを構文解析し、要素・属性・順序・namespaceとsource keyを取得する。XML構文エラー時は通常Importを失敗とし、診断を返す。
+2. 元XMLと形式固有情報をSourceDocumentとして保持する。未知要素・属性はPreserved Dataとして保持する。
+3. URDF意味検証を行い、検出可能な複数の問題を診断する。
+4. 意味検証エラーがある場合はSourceDocumentと診断結果を保持し、RobotDefinitionを生成しない。シミュレーション対象としない。
+5. 意味検証エラーがなくcanonical変換に成功した場合にRobotDefinitionを生成する。警告のみの場合は生成を妨げない。
+6. XML source keyとdomain IDを対応付け、管理層でSourceDocumentとRobotDefinitionを関連付ける。
+7. 対応付け不能または保持失敗の場合は完全な非破壊Import成功とはしない。
+8. Simulator固有の対応可否・変換検証は対象Simulatorを使用する段階で別途行う。
 
 Parserが未知XMLを捨てる場合でも、**元XMLを先に解析して差分を検出**する。parserのdeserialize成功だけで非破壊Import成功とは判定しない。
 
+### 4.1 SourceDocument修正後の再検証
+
+意味検証エラーによりRobotDefinitionが未生成の場合、保持したSourceDocumentを修正し、XML構文解析とURDF意味検証を再実行する。診断結果を更新し、意味検証エラーが解消してcanonical変換に成功した場合にRobotDefinitionを生成し、Source Mappingと関連付けを確立する。編集方法は限定しない。
+
+既存RobotDefinitionがある場合の再Import時のID対応および更新規則は別途確定する。
+
 ## 5. Export処理
+
+通常のモデルExportは正常なRobotDefinitionを前提とする。意味検証エラーによりRobotDefinitionが未生成の場合は通常のモデルExportを行わない。SourceDocumentの保持・編集はモデルExportと区別する。
 
 1. canonical modelから最新の既知URDF要素・属性を構築する。
 2. SourceMappingで所有domain IDを解決する。
 3. 元の親・兄弟アンカーを利用して未知属性・要素を挿入する。
 4. 既知属性との衝突、所有要素削除、復元位置不明、未知情報内の明白な旧名参照等を診断する。
 5. Conflictがあれば通常の完全Exportを拒否する。部分出力を完全Exportと表示しない。
-6. 完全Export後、生成したXMLを再parseし、既知データとPreserved Dataの復元を検証する。
+6. 生成したXMLを再parseし、URDF意味検証と既知データ・Preserved Dataの復元を確認してから完全Export成功とする。
 
 異形式（URDF→MJCF等）へのExportでは、元形式のPreservedNodeを無条件に出力しない。情報が表現できない場合は明示的なlossy操作とdiagnosticを要求する。
 
@@ -130,5 +150,11 @@ fixtureは本リポジトリ独自作成とし、第三者Robotの再配布条�
 - SourceNodeKey / SourceDocumentIdの永続化表現
 - ExportのConflict診断構造と、明示的lossy操作のAPI
 - canonical JSONのversioned schemaとPreserved Data保存方式
+- SourceDocumentの独立永続化と管理層による関連付けの具体的なschema・crate配置
+- 意味検証エラー時の保持・再検証・Simulator検証分離に対応するテスト仕様20の更新
 
 これらをfixtureとテストで確かめるまで、完全な非破壊Export対応を宣言しない。
+
+---
+
+[目次](../目次.md) > 検討資料 > robot-model 非破壊Import Export 詳細設計

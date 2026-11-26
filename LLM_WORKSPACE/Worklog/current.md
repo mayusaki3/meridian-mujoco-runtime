@@ -21,7 +21,7 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 - 根拠: https://github.com/ros/urdfdom および https://github.com/ros2/ros2_documentation/blob/rolling/source/Capabilities/Simulation/URDF/Building-a-Visual-Robot-Model-with-URDF-from-Scratch.rst
 
 - SV-016の追加決定（2026-11-26、A案）：通常Importでは複数ツリーを意味検証エラーとするが、利用者承認後の分割Importを初版で提供する。各独立ツリーを個別検証し、正常なもののみRobotDefinitionを生成する（部分成功許容）。拒否時はSourceDocumentのみ保持する。元XMLは変更しない。ツリー間Mimic参照は分割後の検証対象とし、所属不明の拡張情報は勝手に割り当てず保持・診断する。
-- 一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する。分割後のExportにおける共有情報・所属不明情報の扱いは未確定。
+- 一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する。分割後のExportでは対象Robotの参照Material・所属する未知情報を出力し、他Robotの情報を除外する。所属先不明の未知情報は元SourceDocumentに保持・診断し、自動割当・複製しない（利用者合意済み）。
 - 通常URDF Exportは単一RobotDefinitionから単一ツリーのURDFを生成する。分割Import元の複数ツリーを通常Exportで再構築しない。複数ロボット定義のマージは別ツールとして扱い、初版の通常Exportの責務に含めない（2026-11-26利用者方針）。マージツールの詳細・提供時期は未確定。
 
 ## 最新正本・更新対象
@@ -30,6 +30,7 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 - [資料22](../../docs/ja-JP/09_検討資料/22_robot-model_非破壊Import_Export_詳細設計.md)
 
 ## 実施状況・保留事項
+- 分割Import・部分成功・単独Export・共通情報の方針を資料21（77c16213185fe761f4cf87a5bc6b045370d73501）、資料22（f595a6561a571dfb0a8a29555a1d0dc549b308f0）、資料20（176dd0449c44f9166b83cf28a9fff18f6b8ffa04）へ反映。全件再取得一致PASS。RM-045〜051追加、全51番号重複なし。
 - 上記方針は利用者合意済み。資料21への反映完了（commit 46d8b189b8eb54f4997904e5076d35f97e9bdfae、再取得一致確認PASS）。資料22への反映完了（commit 48c279b29dcd8dc897b18ab089c343e2839ed610、再取得一致確認PASS）。資料20への反映完了（commit d28f31c7b52e485467709453074f8f06bba5ed07、再取得一致確認PASS、RM-001〜044の44番号重複なし）。
 - Robot Catalog・Project Panel連携の作業は保留。
 - 今回の意味検証変更に関する実装・テスト実行は未実施。
@@ -38,12 +39,11 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 ## 最新正本との照合結果
 - 資料20 RM-012をXML構文エラーに限定し、RM-006・007はcanonical構造検証として維持。RM-033〜044を追加し、意味検証・複数診断・循環・mimic・Simulator分離・未知情報保持・再検証・独立永続化・警告・直接作成・Export再検証を定義。
 - 資料21 第6章はXML構文解析と意味検証の分離、SourceDocument保持、Simulator検証分離へ更新済み。管理層の具体的crate配置、診断コード体系は未確定。
-- 資料22 第2・3章はSourceDocumentの独立保持と管理層の関連付けに更新済み。一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する方針は確定、資料への反映と具体的schemaは未完了。
+- 資料22 第2・3章はSourceDocumentの独立保持と管理層の関連付けに更新済み。一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する方針は確定、資料への反映完了、具体的schemaと逆方向の多重度は未確定。
 - 資料22 第4章は意味検証をcanonical変換前に行い、未生成状態から再検証する手順に更新済み。既存RobotDefinitionの再Import更新規則は保留。
 - 資料22 第5章は正常なRobotDefinitionを通常モデルExportの前提とし、出力の再解析・意味検証・復元確認後に完全Export成功とするよう更新済み。
 
 ## 次工程
-- SV-016の分割Import・部分成功・関連付け方針を資料20・21・22へ反映する。単一RobotDefinition単位のExport方針を反映し、共有Material・所属不明拡張情報の扱いを整理する。
 - 個別URDF意味検証規則と診断の詳細を確定し、資料21および資料20の詳細ケースに反映する。
 - 管理層の配置、永続化schema、関連付けの多重度、既存RobotDefinitionへの再Import規則など実装前未確定事項を整理する。
 - 設計・テスト仕様の確定後にテスト作成、実装へ進む。

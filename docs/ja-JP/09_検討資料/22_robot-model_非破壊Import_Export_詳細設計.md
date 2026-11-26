@@ -70,7 +70,7 @@ enum ExportOutcome {
 
 これは**概念的な型**であり、正確なRust API・serde schemaを確定したものではない。特に `SourceNodeKey` は元ファイルの位置情報だけをIDとして使用せず、Import時に生成した安定識別子をcanonicalへ保存する。domain IDとSourceNodeKeyは異なる。
 
-SourceDocumentとRobotDefinitionは独立して保存する。管理層が関連付けを保持し、RobotDefinition未生成時は関連付けを作成しない。直接作成したRobotDefinitionはSourceDocumentを必須としない。SourceAssociationは責務を示す概念型であり、具体的な永続化形式・crate配置・関連付けの多重度は未確定とする。
+SourceDocumentとRobotDefinitionは独立して保存する。管理層が関連付けを保持し、RobotDefinition未生成時は関連付けを作成しない。直接作成したRobotDefinitionはSourceDocumentを必須としない。SourceAssociationは責務を示す概念型であり、一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する。具体的な永続化形式・crate配置および逆方向の多重度は未確定とする。
 
 ## 3. 所有関係・配置
 
@@ -100,9 +100,13 @@ Parserが未知XMLを捨てる場合でも、**元XMLを先に解析して差分
 
 既存RobotDefinitionがある場合の再Import時のID対応および更新規則は別途確定する。
 
+### 4.2 複数ツリーの分割Import
+
+通常Importでは独立した複数Linkツリーを意味検証エラーとして診断する。利用者の承認後に限り、各独立ツリーを個別に意味検証・canonical変換する。正常なツリーのみRobotDefinitionを生成し、部分成功を許容する。未承認・拒否時はSourceDocumentのみ保持する。元XMLを変更せず、成功した各RobotDefinitionについてSource Mappingと関連付けを確立する。ツリー間Mimic参照は分割後の意味検証対象とする。所属先不明の拡張情報は自動割当せず保持・診断する。
+
 ## 5. Export処理
 
-通常のモデルExportは正常なRobotDefinitionを前提とする。意味検証エラーによりRobotDefinitionが未生成の場合は通常のモデルExportを行わない。SourceDocumentの保持・編集はモデルExportと区別する。
+通常のモデルExportは正常な単一RobotDefinitionを前提とする。意味検証エラーによりRobotDefinitionが未生成の場合は通常のモデルExportを行わない。SourceDocumentの保持・編集はモデルExportと区別する。
 
 1. canonical modelから最新の既知URDF要素・属性を構築する。
 2. SourceMappingで所有domain IDを解決する。
@@ -112,6 +116,21 @@ Parserが未知XMLを捨てる場合でも、**元XMLを先に解析して差分
 6. 生成したXMLを再parseし、URDF意味検証と既知データ・Preserved Dataの復元を確認してから完全Export成功とする。
 
 異形式（URDF→MJCF等）へのExportでは、元形式のPreservedNodeを無条件に出力しない。情報が表現できない場合は明示的なlossy操作とdiagnosticを要求する。
+
+### 5.1 分割Import後の単独URDF Export
+
+対象RobotDefinitionから単一ツリーのURDFを生成する。元の複数ツリーを再構築しない。複数ロボットのマージは別ツールの責務とし、初版の通常Exportには含めない。
+
+| 情報 | 扱い |
+|---|---|
+| 対象RobotのLink・Joint | 出力する |
+| 対象Robotが参照する共通Material | 出力する |
+| 対象Robotに属する未知要素・属性 | 復元する |
+| 他のRobotに属する情報 | 出力しない |
+| 所属先不明の未知情報 | 元SourceDocumentに保持し、診断する。自動複製・割当しない |
+| 元の複数ツリー構造 | 復元しない |
+
+完全Exportの判定は対象RobotDefinitionの復元範囲に対して行う。所属先不明の情報を復元済みとは報告しない。既存のConflict・lossy判定規則を維持する。
 
 ## 6. 編集操作別の扱い
 
@@ -151,7 +170,7 @@ fixtureは本リポジトリ独自作成とし、第三者Robotの再配布条�
 - ExportのConflict診断構造と、明示的lossy操作のAPI
 - canonical JSONのversioned schemaとPreserved Data保存方式
 - SourceDocumentの独立永続化と管理層による関連付けの具体的なschema・crate配置
-- 意味検証エラー時の保持・再検証・Simulator検証分離に対応するテスト仕様20の更新
+- 分割Importの部分成功・単独Export・共有情報保持のテスト（資料20 RM-045〜RM-051）
 
 これらをfixtureとテストで確かめるまで、完全な非破壊Export対応を宣言しない。
 

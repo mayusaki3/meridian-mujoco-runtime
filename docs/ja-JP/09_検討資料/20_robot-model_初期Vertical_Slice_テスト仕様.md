@@ -408,6 +408,57 @@ RM-006・RM-007はcanonical構造Validationとして維持し、本ケースはU
 
 RM-033〜RM-044は資料21・22の確定済み処理境界を検証する。個別の意味検証規則一覧、診断コード、永続化schema、関連付けの多重度および既存RobotDefinitionへの再Import規則は別途確定し、必要な詳細ケースを追加する。
 
+
+## 10. 分割Import・単独Exportテスト
+
+### RM-045 複数ツリーの通常Import
+
+**入力:** 独立した正常な2ツリーを含むURDF。
+
+**期待結果:** 意味検証エラーを診断し、承認前および拒否時はRobotDefinitionを生成しない。元SourceDocumentを保持する。
+
+### RM-046 承認後の分割Import
+
+**入力:** RM-045のSourceDocument。
+
+**操作:** 分割Importを承認する。
+
+**期待結果:** 各ツリーから独立したRobotDefinitionを生成し、元XMLを変更せず各関連付けとSource Mappingを確立する。
+
+### RM-047 分割Importの部分成功
+
+**入力:** 独立したツリーの一部に意味検証エラーがあるURDF。
+
+**期待結果:** 承認後、正常なツリーのみ生成・関連付けする。異常なツリーの診断と元XMLを保持する。全ツリー異常の場合は生成しない。
+
+### RM-048 ツリー間Mimic参照
+
+**入力:** 別ツリーのJointを参照するMimicを含むURDF。
+
+**期待結果:** 分割後の意味検証で不正参照を診断し、該当ツリーのRobotDefinitionを生成しない。
+
+### RM-049 分割結果の永続化
+
+**入力:** RM-046のSourceDocumentと複数RobotDefinition。
+
+**操作:** 保存・再読込する。
+
+**期待結果:** 元ファイルなしで各RobotDefinition、SourceDocument、関連付け、Source Mappingを復元できる。
+
+### RM-050 単独URDF Exportと共有Material
+
+**入力:** 分割Import済みの複数RobotDefinitionと、対象Robotが参照する共通Materialを含むSourceDocument。
+
+**期待結果:** 指定したRobotDefinitionのLink・Joint・参照Material・所属する未知情報を単一ツリーのURDFへ出力する。他Robotの情報を出力せず、元の複数ツリーを再構築しない。
+
+### RM-051 所属先不明の拡張情報
+
+**入力:** 分割元のRobot直下に所属先不明の未知要素・属性を含むURDF。
+
+**期待結果:** 元SourceDocumentに保持し、診断する。各Robotへの自動割当・複製を行わず、復元済みと報告しない。既存のConflict・lossy判定規則を維持する。
+
+RM-045〜RM-051は初版の分割Import・単独Exportの検証対象とする。マージツールは対象外とする。
+
 ---
 
 [目次](../目次.md) > 検討資料 > robot-model 初期Vertical Slice テスト仕様

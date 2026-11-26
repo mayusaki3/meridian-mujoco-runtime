@@ -22,7 +22,7 @@ canonical_document: true
 - `robot-model-persistence`（分離は保留）: canonical JSONの保存・読込。初期はrobot-modelのfeature/moduleとしてもよいが、schemaとdomain型を同一視しない。
 - `robot-coordinate-adapter`（分離は保留）: ROS系とSansaXR系の座標変換。初期は純粋関数で検証し、VR runtime依存を入れない。
 
-SourceDocumentとRobotDefinitionは独立して保持し、管理層が関連付けと永続化を担当する。管理層の具体的なcrate配置は未確定とする。
+SourceDocumentとRobotDefinitionは独立して保持し、管理層が関連付けと永続化を担当する。一つのSourceDocumentから複数RobotDefinitionへの関連付けを許容する。管理層の具体的なcrate配置は未確定とする。
 
 依存は `robot-model-import -> robot-model` とし、robot-modelはImporter、MuJoCo、Meridian、workflow-ide-frameworkへ依存しない。
 
@@ -67,11 +67,15 @@ SourceDocument修正後は構文解析・意味検証を再実行し、診断結
 
 ### 6.2 診断
 
-ImportResultはSourceDocument、任意のRobotDefinition、診断結果を区別して扱える構造とする。XML構文解析失敗は別途errorで返す。意味検証では検出可能な複数の問題を収集する。
+ImportResultはSourceDocument、0件以上のRobotDefinition、診断結果を区別して扱える構造とする。XML構文解析失敗は別途errorで返す。意味検証では検出可能な複数の問題を収集する。
 
 既存の診断分類候補 `Warning`、`Unsupported`、`MissingAsset`、`Approximated` を維持し、XML構文エラー、URDF意味検証エラー、Simulator未対応、Simulator変換エラーを区別する。具体的な型・コード体系は別途確定する。
 
 Simulator固有の未対応機能を理由に、URDF自体の意味検証エラーと判定しない。個別の意味検証規則と期待結果はテスト仕様20と整合させる。
+
+### 6.3 複数ツリーの分割Import（SV-016）
+
+通常Importでは独立した複数Linkツリーを意味検証エラーとする。利用者の承認後に限り分割Importを実施する。各ツリーを独立して意味検証し、canonical変換に成功したもののみRobotDefinitionを生成する。部分成功を許容する。未承認・拒否時はRobotDefinitionを生成しない。元XMLと診断はSourceDocumentに保持する。ツリー間Mimic参照は分割後の意味検証対象とする。分割Importは資料22の保持・関連付け規則に従う。
 
 ## 7. Frame変換とVR
 
@@ -134,7 +138,7 @@ SansaVRMと同様に、Import時に未対応情報を捨てず、canonical保存
 
 ### 11.2 Export規則
 
-通常のモデルExportは正常なRobotDefinitionを前提とする。SourceDocumentのみの保持・編集とは区別する。
+通常のモデルExportは正常な単一RobotDefinitionを前提とする。URDF Exportは単一ツリーのURDFを生成し、分割元の複数ツリーを再構築しない。共有情報と所属不明情報は資料22の規則に従う。複数ロボットのマージは別ツールの責務とし、初版の通常Export対象外とする。SourceDocumentのみの保持・編集とは区別する。
 
 1. 既知項目は現在のcanonical modelから出力する。
 2. 未対応項目はSource Mappingに従って元の位置・順序・所有要素へ復元する。

@@ -28,6 +28,8 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 
 - Joint axis検証はA案（2026-11-27合意）。単位ベクトルは正常、非単位ベクトルは警告しcanonical変換時に正規化する。ゼロベクトル、非有限値、数値変換不能は意味検証エラー。axis省略時はURDF既定値を適用する。元XMLは変更しない。数値許容誤差・極小ベクトル判定閾値は未確定。資料20・21への反映待ち。
 
+- Joint Limit境界値はA案（2026-11-27合意）。lower > upper、負のeffort・velocity、非有限値、URDF version・Joint typeに応じた必須属性欠落はエラー。lower = upper、velocityゼロは警告。effortゼロは許容し、Actuatorの有無とは区別する。lower < upperは正常。数値許容誤差は未確定。資料20・21への反映待ち。
+
 ## 最新正本・更新対象
 - [資料20](../../docs/ja-JP/09_検討資料/20_robot-model_初期Vertical_Slice_テスト仕様.md)
 - [資料21](../../docs/ja-JP/09_検討資料/21_robot-model_実装前型・変換境界設計.md)

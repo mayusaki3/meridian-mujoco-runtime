@@ -1,6 +1,6 @@
 # Worklog
 
-更新日: 2026-11-27 (JST)
+更新日: 2026-11-28 (JST)
 対象ブランチ: develop
 
 ## 現在工程
@@ -31,6 +31,8 @@ URDF意味検証・非破壊Import/Exportの設計更新。資料20・21・22の
 - Joint Limit境界値はA案（2026-11-27合意）。lower > upper、負のeffort・velocity、非有限値、URDF version・Joint typeに応じた必須属性欠落はエラー。lower = upper、velocityゼロは警告。effortゼロは許容し、Actuatorの有無とは区別する。lower < upperは正常。数値許容誤差は未確定。資料20・21への反映待ち。
 
 - Geometry物理寸法はA案（2026-11-27合意）。Box辺長、Sphere半径、Cylinder半径・長さの負値はエラー、ゼロ値は警告。Mesh scaleの負値は鏡像表現として許容し、ゼロ値は警告。非有限値、数値変換不能、必須属性欠落はエラー。法線・頂点順序の処理は別途考慮し、Simulator固有の形状制限はSimulator検証で扱う。資料20・21への反映待ち。
+
+- 外部Asset参照検証はA案（2026-11-28合意）。必須filename欠落・空文字は意味検証エラー。参照先不存在、アクセス不能、package URI解決不能、未対応ファイル形式は警告として扱う。URDF意味検証、Asset参照解決、Asset内容検証、Simulator固有検証を分離する。Asset追加・再解決時はRobotDefinitionのIDを維持し、Import再実行を必須としない。再解決API詳細は未確定。資料20・21への反映待ち。
 
 ## 最新正本・更新対象
 - [資料20](../../docs/ja-JP/09_検討資料/20_robot-model_初期Vertical_Slice_テスト仕様.md)
